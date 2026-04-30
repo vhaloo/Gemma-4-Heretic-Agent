@@ -13,93 +13,115 @@ from PIL import ImageGrab
 from io import BytesIO
 from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO, emit
+from duckduckgo_search import DDGS
 
-# Maximum Verbosity
+# --- CORE CONFIGURATION ---
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder='public', static_folder='public')
-socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=5000, ping_timeout=60)
+socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=10000, ping_timeout=120)
 
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "gemma-4-26B-A4B-it-heretic:latest"
 WORKSPACE = os.path.join(os.path.expanduser("~"), "Desktop", "Gemma_Web_CLI")
 HISTORY_FILE = os.path.join(WORKSPACE, "chat_history.json")
+os.makedirs(WORKSPACE, exist_ok=True)
 
-# Core State & Control
+SYSTEM_PROMPT = """You are a professional local AI assistant. 
+Your goal is to help the user with technical tasks, file management, and system control.
+Always use your <planner> tags to outline your steps before acting.
+Provide clear, accurate, and direct responses.
+Avoid dramatic or fictional roleplay. 
+You have access to the following capabilities:
+1. Shell Execution (PowerShell)
+2. File Management (Read, Write, List, Delete)
+3. Direct PC Control (Vision, Click, Type, Keyboard)
+4. Web Search (Real-time info)
+5. Voice Synthesis (TTS)
+Always confirm the result of your actions."""
+
+# --- STATE MANAGEMENT ---
 stop_event = threading.Event()
-active_sid = None
 
 def telemetry(msg, category="SYSTEM", data=None):
-    """High-fidelity logging to the UI"""
-    payload = {
-        "msg": msg,
-        "cat": category,
-        "data": data if data else {},
-        "ts": time.time()
-    }
-    socketio.emit('telemetry', payload)
+    socketio.emit('telemetry', {"msg": msg, "cat": category, "data": data if data else {}, "ts": time.time()})
 
-def get_sys_metrics():
-    gpu_metrics = []
+def get_metrics():
+    gpu_data = []
     try:
         for g in GPUtil.getGPUs():
-            gpu_metrics.append({"id": g.id, "load": g.load*100, "temp": g.temperature, "vram": g.memoryUtil*100})
+            gpu_data.append({"id": g.id, "load": g.load*100, "temp": g.temperature, "vram": g.memoryUtil*100})
     except: pass
+    net = psutil.net_io_counters()
     return {
         "cpu": psutil.cpu_percent(),
         "ram": psutil.virtual_memory().percent,
-        "gpus": gpu_metrics,
+        "gpus": gpu_data,
+        "net": {"sent": net.bytes_sent, "recv": net.bytes_recv},
         "disk": psutil.disk_usage('C:').percent
     }
 
-# --- Atomic Tools ---
+# --- TOOL IMPLEMENTATIONS ---
 
 def t_shell(cmd):
-    telemetry(f"Shell Execution Initialized: {cmd}", "OS")
+    telemetry(f"Shell: {cmd}", "COMMAND")
     try:
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=120)
-        telemetry(f"Shell Completed with Exit Code {proc.returncode}", "OS")
-        return {"stdout": proc.stdout, "stderr": proc.stderr, "code": proc.returncode}
-    except Exception as e:
-        telemetry(f"Shell Fault: {str(e)}", "ERROR")
-        return {"error": str(e)}
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=120)
+        return {"stdout": r.stdout, "stderr": r.stderr, "code": r.returncode}
+    except Exception as e: return {"error": str(e)}
 
 def t_fs(op, path, text=None):
-    telemetry(f"File Operation: {op} on {path}", "FS")
+    telemetry(f"Files: {op} -> {path}", "STORAGE")
     try:
-        if op == "list": return {"items": os.listdir(path)}
+        if op == "list": 
+            items = []
+            for entry in os.scandir(path):
+                items.append({"name": entry.name, "dir": entry.is_dir(), "size": entry.stat().st_size})
+            return {"items": items}
         if op == "read":
             with open(path, 'r', encoding='utf-8', errors='ignore') as f: return {"content": f.read()}
         if op == "write":
-            with open(path, 'w', encoding='utf-8', errors='ignore') as f: f.write(text); return {"status": "success"}
+            with open(path, 'w', encoding='utf-8') as f: f.write(text); return {"status": "success"}
         if op == "delete": os.remove(path); return {"status": "deleted"}
-    except Exception as e:
-        telemetry(f"FS Fault: {str(e)}", "ERROR")
-        return {"error": str(e)}
+    except Exception as e: return {"error": str(e)}
 
 def t_pc(action, x=None, y=None, text=None):
-    telemetry(f"Native Control Triggered: {action}", "PC")
+    telemetry(f"PC Control: {action}", "HARDWARE")
     try:
-        if action == "click": pyautogui.click(x, y); return "click_confirmed"
-        if action == "type": pyautogui.write(text); return "type_confirmed"
+        if action == "click": pyautogui.click(x, y); return "clicked"
+        if action == "type": pyautogui.write(text); return "typed"
         if action == "vision":
             s = ImageGrab.grab()
             b = BytesIO()
             s.save(b, format="PNG")
-            telemetry("Vision Stream Captured", "VISION")
             return {"img": base64.b64encode(b.getvalue()).decode()}
-    except Exception as e:
-        telemetry(f"Control Fault: {str(e)}", "ERROR")
-        return {"error": str(e)}
+        if action == "hotkey": pyautogui.hotkey(*text.split('+')); return "pressed"
+    except Exception as e: return {"error": str(e)}
+
+def t_web(query):
+    telemetry(f"Search: {query}", "INTERNET")
+    try:
+        with DDGS() as ddgs:
+            return [r for r in ddgs.text(query, max_results=5)]
+    except Exception as e: return {"error": str(e)}
+
+def t_speak(text):
+    telemetry("Voice Output", "AUDIO")
+    cmd = f"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{text.replace("'", "''")}')"
+    subprocess.Popen(["powershell", "-Command", cmd])
+    return "speaking"
 
 TOOLS = [
-    {"type": "function", "function": {"name": "run_shell", "description": "Execute powershell commands.", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
-    {"type": "function", "function": {"name": "file_op", "description": "High-level file management.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
-    {"type": "function", "function": {"name": "pc_control", "description": "Direct OS hardware access.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}}
+    {"type": "function", "function": {"name": "run_shell", "description": "Run powershell command.", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
+    {"type": "function", "function": {"name": "file_op", "description": "Manage local files.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
+    {"type": "function", "function": {"name": "pc_control", "description": "Interact with mouse/keyboard/screen.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "web_search", "description": "Search the internet for real-time information.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "speak", "description": "Text-to-speech output.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}
 ]
 
+# --- HISTORY ---
 chat_history = []
 if os.path.exists(HISTORY_FILE):
     try:
@@ -110,13 +132,13 @@ if os.path.exists(HISTORY_FILE):
 def index(): return render_template('index.html')
 
 @app.route('/api/status')
-def status(): return jsonify({"metrics": get_sys_metrics()})
+def status(): return jsonify({"metrics": get_metrics()})
 
 @socketio.on('stop')
 def handle_stop():
     global stop_event
     stop_event.set()
-    telemetry("Hard Interrupt: Neural Process Killed", "WARN")
+    telemetry("Process Interrupted", "ALERT")
 
 @socketio.on('message')
 def handle_msg(data):
@@ -127,45 +149,38 @@ def handle_msg(data):
     files = data.get('files', [])
     opts = data.get('opts', {"temperature": 0.8, "num_ctx": 32768})
     
+    if not chat_history:
+        chat_history.append({"role": "system", "content": SYSTEM_PROMPT})
+    
     if files:
-        telemetry(f"Injecting {len(files)} files into context", "DATA")
-        prompt += "\n\n[CONTEXT FILES]\n"
-        for f in files:
-            prompt += f"--- {f['name']} ---\n{f['content']}\n"
+        prompt += "\n\n[USER ATTACHMENTS]\n"
+        for f in files: prompt += f"FILE: {f['name']}\nCONTENT:\n{f['content']}\n---\n"
 
     chat_history.append({"role": "user", "content": prompt})
-    telemetry("Neural Sequence Initiated", "OLLAMA")
     
     try:
-        for step in range(20): # Extreme reasoning depth
+        for loop in range(20):
             if stop_event.is_set(): break
+            telemetry(f"Processing Layer {loop+1}", "ANALYSIS")
+            emit('bot', {"type": 'step', "content": f"Reasoning {loop+1}..."})
             
-            telemetry(f"Convergence Phase {step+1}", "REASONING")
-            emit('bot', {"type": 'step', "content": f"Neural Layer {step+1}..."})
-            
-            payload = {"model": MODEL_NAME, "messages": chat_history, "tools": TOOLS, "stream": True, "options": opts}
-            resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True)
+            resp = requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL_NAME, "messages": chat_history, "tools": TOOLS, "stream": True, "options": opts}, stream=True)
             
             full_txt, tool_calls = "", []
             for line in resp.iter_lines():
                 if stop_event.is_set(): break
                 if not line: continue
-                
                 chunk = json.loads(line)
                 if 'message' in chunk:
                     m = chunk['message']
                     if 'content' in m and m['content']:
                         c = m['content']
                         full_txt += c
-                        # Parse thinking stream
                         if "planner" in full_txt.lower() and "(end of thought process)" not in full_txt.lower():
                             emit('bot', {"type": 'thought', "content": c})
                         else:
                             emit('bot', {"type": 'stream', "content": c})
-                    
-                    if 'tool_calls' in m:
-                        tool_calls.extend(m['tool_calls'])
-                
+                    if 'tool_calls' in m: tool_calls.extend(m['tool_calls'])
                 if chunk.get('done'): break
             
             if stop_event.is_set(): break
@@ -174,24 +189,25 @@ def handle_msg(data):
                 chat_history.append({"role": "assistant", "content": full_txt, "tool_calls": tool_calls})
                 for t in tool_calls:
                     name, args = t['function']['name'], t['function']['arguments']
-                    telemetry(f"Tool Call: {name}", "TOOL", data=args)
+                    telemetry(f"Executing: {name}", "TOOL", data=args)
                     
                     res = None
                     if name == "run_shell": res = t_shell(args['cmd'])
                     elif name == "file_op": res = t_fs(args['op'], args['path'], args.get('text'))
                     elif name == "pc_control": res = t_pc(args['action'], args.get('x'), args.get('y'), args.get('text'))
+                    elif name == "web_search": res = t_web(args['query'])
+                    elif name == "speak": res = t_speak(args['text'])
                     
                     chat_history.append({"role": "tool", "content": json.dumps(res)})
                 continue
             else:
                 chat_history.append({"role": "assistant", "content": full_txt})
                 with open(HISTORY_FILE, 'w') as f: json.dump(chat_history, f)
-                telemetry("Response Finalized", "OLLAMA")
                 emit('bot', {"type": 'end'})
                 break
 
     except Exception as e:
-        telemetry(f"Core Fault: {str(e)}", "FATAL")
+        telemetry(str(e), "ERROR")
         emit('bot', {"type": 'error', "content": str(e)})
 
 @socketio.on('clear')
@@ -199,7 +215,6 @@ def handle_clear():
     global chat_history
     chat_history = []
     if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
-    telemetry("Memory Core Purged", "SYSTEM")
 
 if __name__ == "__main__":
     socketio.run(app, port=8080, debug=True)
