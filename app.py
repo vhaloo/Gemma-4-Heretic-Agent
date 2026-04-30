@@ -3,55 +3,44 @@ import json
 import requests
 import subprocess
 import base64
-import time
+import logging
 import pyautogui
 from PIL import ImageGrab
 from io import BytesIO
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
-from werkzeug.utils import secure_filename
+
+# Logging setup
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__, template_folder='public', static_folder='public')
-socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=5)
+socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=10)
 
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "gemma-4-26B-A4B-it-heretic:latest"
 WORKSPACE = "C:\\Users\\Vhaloo\\Desktop\\Gemma_Web_CLI"
 HISTORY_FILE = os.path.join(WORKSPACE, "chat_history.json")
-UPLOAD_FOLDER = os.path.join(WORKSPACE, "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# Persistent History
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-def save_history(history):
-    with open(HISTORY_FILE, 'w') as f:
-        json.dump(history, f, indent=2)
-
-chat_history = load_history()
 
 # Tools Configuration
 def get_screenshot():
-    screenshot = ImageGrab.grab()
-    buffered = BytesIO()
-    screenshot.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
-    return img_str
+    try:
+        screenshot = ImageGrab.grab()
+        buffered = BytesIO()
+        screenshot.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+    except Exception as e:
+        return f"Screenshot error: {str(e)}"
 
 def tool_execute_shell(command):
+    logging.info(f"Executing shell: {command}")
     try:
-        result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True, timeout=60)
         return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
-    except Exception as e: return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 def tool_file_op(op, path, content=None):
+    logging.info(f"File op: {op} on {path}")
     try:
         if op == "read":
             with open(path, 'r', encoding='utf-8') as f: return {"content": f.read()}
@@ -59,87 +48,99 @@ def tool_file_op(op, path, content=None):
             with open(path, 'w', encoding='utf-8') as f: f.write(content); return {"status": "success"}
         elif op == "list":
             return {"files": os.listdir(path)}
-    except Exception as e: return {"error": str(e)}
+        elif op == "delete":
+            os.remove(path); return {"status": "deleted"}
+    except Exception as e:
+        return {"error": str(e)}
 
 def tool_computer_control(action, x=None, y=None, text=None):
+    logging.info(f"Computer control: {action}")
     try:
         if action == "click": pyautogui.click(x, y); return "Clicked at {}, {}".format(x, y)
         if action == "type": pyautogui.write(text); return "Typed: {}".format(text)
         if action == "move": pyautogui.moveTo(x, y); return "Moved to {}, {}".format(x, y)
         if action == "screenshot": return {"screenshot": get_screenshot()}
         if action == "coords": return {"x": pyautogui.position().x, "y": pyautogui.position().y}
-    except Exception as e: return {"error": str(e)}
+        if action == "hotkey": pyautogui.hotkey(*text.split('+')); return f"Pressed hotkey {text}"
+    except Exception as e:
+        return {"error": str(e)}
 
 TOOLS = [
-    {"type": "function", "function": {"name": "execute_shell", "description": "Run a powershell command.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
-    {"type": "function", "function": {"name": "file_system", "description": "Read, write, or list files.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["read", "write", "list"]}, "path": {"type": "string"}, "content": {"type": "string"}}, "required": ["op", "path"]}}},
-    {"type": "function", "function": {"name": "computer_control", "description": "Control mouse, keyboard, or take screenshots.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "move", "screenshot", "coords"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}}
+    {"type": "function", "function": {"name": "execute_shell", "description": "Run powershell command.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "file_system", "description": "Read, write, list or delete files.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["read", "write", "list", "delete"]}, "path": {"type": "string"}, "content": {"type": "string"}}, "required": ["op", "path"]}}},
+    {"type": "function", "function": {"name": "computer_control", "description": "Control mouse (click, move, coords), keyboard (type, hotkey), or vision (screenshot).", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "move", "screenshot", "coords", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}}
 ]
 
+# History Management
+chat_history = []
+if os.path.exists(HISTORY_FILE):
+    try:
+        with open(HISTORY_FILE, 'r') as f: chat_history = json.load(f)
+    except: pass
+
 @app.route('/')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route('/api/status')
 def status():
     try:
         resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
         models = [m['name'] for m in resp.json().get('models', [])]
-        return jsonify({"ollama": True, "model": MODEL_NAME in models})
-    except: return jsonify({"ollama": False, "model": False})
+        return jsonify({"ollama": True, "model": MODEL_NAME in models, "models": models})
+    except: return jsonify({"ollama": False, "model": False, "models": []})
+
+@app.route('/api/pull', methods=['POST'])
+def pull_model():
+    model = request.json.get('model')
+    try:
+        def generate():
+            resp = requests.post(f"{OLLAMA_URL}/api/pull", json={"name": model}, stream=True)
+            for line in resp.iter_lines():
+                if line: yield line + b"\n"
+        return app.response_class(generate(), mimetype='application/json')
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @socketio.on('user_message')
 def handle_message(payload):
     global chat_history
     user_text = payload.get('message', '')
-    images = payload.get('images', []) # Base64 images
+    images = payload.get('images', [])
     
-    current_msg = {"role": "user", "content": user_text}
-    if images: current_msg["images"] = images
+    msg = {"role": "user", "content": user_text}
+    if images: msg["images"] = images
     
-    chat_history.append(current_msg)
-    emit('bot_response', {"type": 'status', "content": "Analyzing request..."})
+    chat_history.append(msg)
+    emit('bot_response', {"type": 'status', "content": "Thinking..."})
     
     try:
-        for _ in range(5): # Allow up to 5 tool chain steps
-            ollama_payload = {"model": MODEL_NAME, "messages": chat_history, "tools": TOOLS, "stream": False}
-            response = requests.post(f"{OLLAMA_URL}/v1/chat/completions", json=ollama_payload)
-            res_json = response.json()
-            message = res_json['choices'][0]['message']
+        for _ in range(7): # Deep tool chaining
+            response = requests.post(f"{OLLAMA_URL}/v1/chat/completions", json={"model": MODEL_NAME, "messages": chat_history, "tools": TOOLS, "stream": False})
+            message = response.json()['choices'][0]['message']
             
-            # Extract reasoning/thought if it exists in the message content
             if message.get('content') and "planner" in message['content']:
-                emit('bot_response', {"type": 'thought', "content": message['content'].split("(End of thought process)")[0]})
+                emit('bot_response', {"type": 'thought', "content": message['content']})
 
             if 'tool_calls' in message and message['tool_calls']:
                 chat_history.append(message)
                 for tool in message['tool_calls']:
                     fn_name = tool['function']['name']
                     fn_args = json.loads(tool['function']['arguments'])
-                    emit('bot_response', {"type": 'status', "content": f"Running {fn_name}..."})
+                    emit('bot_response', {"type": 'status', "content": f"Invoking {fn_name}..."})
                     
-                    result = None
-                    if fn_name == "execute_shell": result = tool_execute_shell(fn_args['command'])
-                    elif fn_name == "file_system": result = tool_file_op(fn_args['op'], fn_args['path'], fn_args.get('content'))
-                    elif fn_name == "computer_control": result = tool_computer_control(fn_args['action'], fn_args.get('x'), fn_args.get('y'), fn_args.get('text'))
+                    res = None
+                    if fn_name == "execute_shell": res = tool_execute_shell(fn_args['command'])
+                    elif fn_name == "file_system": res = tool_file_op(fn_args['op'], fn_args['path'], fn_args.get('content'))
+                    elif fn_name == "computer_control": res = tool_computer_control(fn_args['action'], fn_args.get('x'), fn_args.get('y'), fn_args.get('text'))
                     
-                    chat_history.append({"role": "tool", "tool_call_id": tool['id'], "name": fn_name, "content": json.dumps(result)})
-                continue # Loop back to get final response
+                    chat_history.append({"role": "tool", "tool_call_id": tool['id'], "name": fn_name, "content": json.dumps(res)})
+                continue
             else:
-                bot_text = message.get('content', '')
-                chat_history.append({"role": "assistant", "content": bot_text})
-                save_history(chat_history)
-                emit('bot_response', {"type": 'text', "content": bot_text})
+                txt = message.get('content', '')
+                chat_history.append({"role": "assistant", "content": txt})
+                with open(HISTORY_FILE, 'w') as f: json.dump(chat_history, f)
+                emit('bot_response', {"type": 'text', "content": txt})
                 break
-    except Exception as e:
-        emit('bot_response', {"type": 'error', "content": str(e)})
-
-@socketio.on('clear_history')
-def clear_history():
-    global chat_history
-    chat_history = []
-    if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
-    emit('bot_response', {"type": 'status', "content": "History cleared."})
+    except Exception as e: emit('bot_response', {"type": 'error', "content": str(e)})
 
 if __name__ == "__main__":
     socketio.run(app, port=8080, debug=True)
