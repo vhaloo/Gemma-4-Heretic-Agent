@@ -3,249 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Heretic OS | Pro Interface</title>
+    <title>Heretic OS | Absolute Control</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
-            --bg: #030305;
-            --panel: rgba(10, 10, 15, 0.9);
-            --border: rgba(139, 92, 246, 0.2);
-            --accent: #a78bfa;
-            --accent-dim: rgba(167, 139, 250, 0.1);
-            --text: #f8fafc;
+            --bg: #020205;
+            --panel: rgba(10, 10, 18, 0.95);
+            --accent: #8b5cf6;
+            --accent-bright: #c084fc;
+            --border: rgba(139, 92, 246, 0.25);
+            --text: #f1f5f9;
             --text-dim: #475569;
+            --danger: #ef4444;
         }
 
         body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        /* Animated Flow */
-        #flow-canvas { position: fixed; inset: 0; z-index: -1; opacity: 0.5; }
+        /* Optimized Neural Background */
+        #neural-canvas { position: fixed; inset: 0; z-index: -1; opacity: 0.6; }
 
-        .app { display: flex; height: 100vh; backdrop-filter: blur(15px); }
+        .app-layout { display: flex; height: 100vh; backdrop-filter: blur(25px); }
 
-        /* Left Side: System Control */
-        .side { 
-            width: 340px; background: var(--panel); border-right: 1px solid var(--border); 
-            display: flex; flex-direction: column; padding: 30px; gap: 24px;
+        /* Sidebar: High-Fidelity Stats & Telemetry */
+        .sidebar { 
+            width: 360px; background: var(--panel); border-right: 1px solid var(--border); 
+            display: flex; flex-direction: column; padding: 30px; gap: 20px; z-index: 100;
         }
 
-        .brand h1 { margin: 0; font-size: 1.8rem; letter-spacing: 5px; color: var(--accent); text-shadow: 0 0 20px var(--accent-dim); }
+        .brand h1 { margin: 0; font-size: 1.6rem; letter-spacing: 6px; color: var(--accent-bright); font-weight: 900; text-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+        .brand p { margin: 4px 0; font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; }
 
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .stat { background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 15px; border-radius: 15px; }
-        .stat label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-        .stat div { font-size: 1.1rem; font-weight: 800; color: var(--accent); margin-top: 5px; }
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .metric-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 12px; border-radius: 12px; position: relative; overflow: hidden; }
+        .metric-card label { font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; font-weight: bold; }
+        .metric-card .val { font-size: 1.1rem; font-weight: 800; color: var(--accent-bright); margin-top: 4px; display: block; }
+        .metric-bar { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--accent); transition: width 1s; width: 0%; }
 
-        /* System Trace Console */
-        #trace-view { 
-            background: rgba(0,0,0,0.5); border: 1px solid var(--border); height: 200px;
-            border-radius: 12px; overflow-y: auto; padding: 15px; font-family: 'Fira Code', monospace; font-size: 0.7rem;
+        /* Hyper-Verbose Telemetry Console */
+        #telemetry-box { 
+            flex: 1; background: rgba(0,0,0,0.6); border: 1px solid var(--border);
+            border-radius: 12px; overflow-y: auto; padding: 15px; font-family: 'Fira Code', monospace; font-size: 0.65rem;
+            display: flex; flex-direction: column; gap: 6px;
         }
-        .trace-line { margin-bottom: 4px; display: flex; gap: 10px; opacity: 0.8; }
-        .trace-tag { font-weight: bold; color: var(--accent); min-width: 50px; }
+        .tel-line { display: flex; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px; opacity: 0.9; }
+        .tel-cat { color: var(--accent-bright); font-weight: bold; min-width: 55px; }
+        .tel-msg { color: #cbd5e1; white-space: pre-wrap; word-break: break-all; }
 
-        /* Main Chat Area */
-        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        #scroller { flex: 1; overflow-y: auto; padding: 60px 10%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
+        /* Main Interaction Area */
+        .main-stage { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        
+        #chat-scroller { flex: 1; overflow-y: auto; padding: 60px 12%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
 
-        .bubble { padding: 25px; border-radius: 24px; line-height: 1.8; font-size: 1.1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); position: relative; }
-        .user-bubble { align-self: flex-end; max-width: 80%; background: var(--accent-dim); border-color: var(--accent); border-radius: 24px 24px 4px 24px; }
+        .msg-container { width: 100%; display: flex; flex-direction: column; }
+        .bubble { 
+            padding: 28px; border-radius: 24px; line-height: 1.8; font-size: 1.1rem; 
+            background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border);
+        }
+        .user-bubble { align-self: flex-end; max-width: 85%; background: rgba(139, 92, 246, 0.1); border-color: var(--accent); border-radius: 28px 28px 4px 28px; }
         .bot-bubble { align-self: flex-start; width: 100%; }
 
-        .think-box { background: rgba(0,0,0,0.3); border-left: 3px solid var(--accent); padding: 20px; margin-bottom: 20px; border-radius: 8px; font-size: 0.95rem; }
-        .think-box summary { cursor: pointer; color: var(--accent); font-weight: 800; margin-bottom: 10px; }
+        /* Transparent Reasoning Process */
+        .thought-trace { 
+            background: rgba(0,0,0,0.4); border-left: 3px solid var(--accent-bright); 
+            padding: 20px; margin-bottom: 25px; border-radius: 6px; font-size: 0.95rem; color: #94a3b8;
+        }
+        .thought-trace summary { cursor: pointer; color: var(--accent-bright); font-weight: 900; margin-bottom: 12px; outline: none; }
 
-        /* Advanced Input */
-        .input-area { padding: 40px 10%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.4); }
+        /* Absolute Control Input Zone */
+        .control-zone { padding: 40px 12%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.5); backdrop-filter: blur(15px); }
         
-        #file-previews { display: none; gap: 12px; padding-bottom: 15px; flex-wrap: wrap; }
-        .preview-card { background: var(--panel); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px; }
-        .preview-card button { background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; }
+        #file-tray { display: none; gap: 10px; padding-bottom: 15px; flex-wrap: wrap; }
+        .file-chip { background: var(--panel); border: 1px solid var(--accent); padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; color: var(--accent-bright); }
 
         .input-shell {
             background: var(--panel); border: 1px solid var(--border); border-radius: 40px;
-            padding: 12px 30px; display: flex; align-items: center; gap: 20px;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            padding: 10px 30px; display: flex; align-items: center; gap: 20px;
+            box-shadow: 0 0 60px rgba(0,0,0,0.6);
         }
-        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.15rem; resize: none; max-height: 300px; }
+        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.15rem; resize: none; max-height: 350px; }
 
-        .btn { background: var(--accent); color: black; border: none; padding: 12px 35px; border-radius: 25px; font-weight: 900; cursor: pointer; transition: 0.3s; }
-        .btn:hover { transform: scale(1.05); box-shadow: 0 0 20px var(--accent-dim); }
-        .btn-stop { background: #ef4444; display: none; color: white; }
+        .btn-core { background: var(--accent); color: black; border: none; padding: 12px 35px; border-radius: 30px; font-weight: 900; cursor: pointer; transition: 0.2s; }
+        .btn-core:hover { transform: translateY(-2px); box-shadow: 0 0 25px var(--accent); }
+        #btn-stop { background: var(--danger); color: white; display: none; }
+        
+        .icon-trigger { background: transparent; border: none; color: var(--text-dim); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; }
+        .icon-trigger:hover { color: var(--accent-bright); }
 
-        .icon-btn { background: rgba(255,255,255,0.05); border: none; color: white; width: 48px; height: 48px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
-        .icon-btn:hover { background: var(--accent); color: black; }
+        /* Settings Overhang */
+        .matrix-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; align-items: center; justify-content: center; }
+        .matrix-content { background: #0a0a12; border: 1px solid var(--accent); padding: 50px; border-radius: 35px; width: 650px; display: flex; flex-direction: column; gap: 25px; }
 
-        /* Settings Modal */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
-        .modal-inner { background: #0a0a10; border: 1px solid var(--border); padding: 40px; border-radius: 30px; width: 600px; display: flex; flex-direction: column; gap: 20px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     </style>
 </head>
 <body>
 
-    <canvas id="flow-canvas"></canvas>
+    <canvas id="neural-canvas"></canvas>
 
-    <div class="app">
-        <aside class="side">
+    <div class="app-layout">
+        <aside class="sidebar">
             <div class="brand">
                 <h1>HERETIC</h1>
-                <p>Pro System Interface</p>
+                <p>Absolute Neural OS</p>
             </div>
 
-            <div class="stats-grid">
-                <div class="stat"><label>CPU</label><div id="val-cpu">0%</div></div>
-                <div class="stat"><label>GPU</label><div id="val-gpu">0%</div></div>
-                <div class="stat"><label>RAM</label><div id="val-ram">0%</div></div>
-                <div class="stat"><label>LINK</label><div style="color:#10b981">READY</div></div>
+            <div class="metrics-grid">
+                <div class="metric-card"><label>CORES</label><span id="v-cpu" class="val">0%</span><div id="b-cpu" class="metric-bar"></div></div>
+                <div class="metric-card"><label>NEURAL</label><span id="v-gpu" class="val">0%</span><div id="b-gpu" class="metric-bar"></div></div>
+                <div class="metric-card"><label>SYNAPSE</label><span id="v-ram" class="val">0%</span><div id="b-ram" class="metric-bar"></div></div>
+                <div class="metric-card"><label>TEMP</label><span id="v-tmp" class="val">0°C</span></div>
             </div>
 
             <nav style="display:flex; flex-direction:column; gap:10px">
-                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="showSettings()">⚙️ ADVANCED MATRIX</button>
-                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="purge()">🧹 PURGE HISTORY</button>
-                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="vision()">📷 SYNC VISION</button>
+                <button class="btn-core" style="width:100%; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--border);" onclick="openMatrix()">⚙️ NEURAL MATRIX</button>
+                <button class="btn-core" style="width:100%; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--border);" onclick="purge()">🧹 PURGE CORE</button>
+                <button class="btn-core" style="width:100%; background:rgba(255,255,255,0.05); color:white; border:1px solid var(--border);" onclick="visionSync()">📷 VISION SYNC</button>
             </nav>
 
-            <div id="trace-view">
-                <div class="trace-line"><span class="trace-tag">SYS</span> Core Initialized.</div>
+            <div id="telemetry-box">
+                <div class="tel-line"><span class="tel-cat">SYS</span> Hardware interface ready.</div>
             </div>
 
-            <div style="text-align:center; font-size:0.6rem; color:var(--text-dim); letter-spacing:4px; margin-top:auto">VHALOO // ARCHITECT</div>
+            <div style="text-align:center; font-size:0.6rem; color:var(--text-dim); letter-spacing:5px; margin-top:auto; opacity:0.5">VHALOO // NEURAL ARCHITECT</div>
         </aside>
 
-        <main class="main">
-            <div id="scroller"></div>
+        <main class="main-stage">
+            <div id="chat-scroller"></div>
 
-            <div class="input-area">
-                <div id="file-previews"></div>
-                <div id="status-line" style="font-size:0.8rem; color:var(--accent); margin-bottom:10px; display:none; font-weight:bold">● ANALYZING...</div>
+            <div class="control-zone">
+                <div id="file-tray"></div>
+                <div id="status-pulse" style="font-size:0.75rem; color:var(--accent-bright); margin-bottom:12px; display:none; font-weight:900; letter-spacing:1px">● PROCESSING SEQUENCE...</div>
                 <div class="input-shell">
-                    <input type="file" id="file-in" style="display:none" multiple>
-                    <button class="icon-btn" onclick="document.getElementById('file-in').click()">📎</button>
-                    <textarea id="user-in" rows="1" placeholder="Enter High-Level Instruction..."></textarea>
-                    <button id="stop-btn" class="btn btn-stop" onclick="stop()">STOP</button>
-                    <button id="send-btn" class="btn" onclick="send()">SEND</button>
+                    <input type="file" id="file-raw" style="display:none" multiple>
+                    <button class="icon-trigger" onclick="document.getElementById('file-raw').click()">📎</button>
+                    <textarea id="user-msg" rows="1" placeholder="Instruct the Heretic..."></textarea>
+                    <button id="btn-stop" class="btn-core" onclick="stopProcess()">STOP</button>
+                    <button id="btn-send" class="btn-core" onclick="initiateSend()">SEND</button>
                 </div>
             </div>
         </main>
     </div>
 
-    <div id="settings-modal" class="modal">
-        <div class="modal-inner">
-            <h2>Neural Matrix Configuration</h2>
-            <div style="display:flex; flex-direction:column; gap:20px">
+    <div id="modal-matrix" class="matrix-modal">
+        <div class="matrix-content">
+            <h2 style="margin-top:0; letter-spacing:2px">CORE CONFIGURATION</h2>
+            <div style="display:flex; flex-direction:column; gap:25px">
                 <div>
-                    <label>Temperature (Creativity: 0.0 - 2.0)</label>
-                    <input type="range" id="m-temp" min="0" max="2" step="0.1" value="0.8" style="width:100%">
+                    <label style="color:var(--text-dim); font-size:0.8rem">Creativity Flux (Temperature)</label>
+                    <input type="range" id="p-temp" min="0" max="2" step="0.1" value="0.8" style="width:100%; margin-top:10px">
                 </div>
                 <div>
-                    <label>Context Limit (Max: 131072)</label>
-                    <input type="number" id="m-ctx" value="32768" style="width:100%; background:#000; color:#fff; border:1px solid var(--border); padding:10px">
+                    <label style="color:var(--text-dim); font-size:0.8rem">Neural Window (Context Size)</label>
+                    <input type="number" id="p-ctx" value="32768" style="width:100%; background:#000; color:#fff; border:1px solid var(--border); padding:15px; border-radius:10px; margin-top:10px">
                 </div>
                 <div>
-                    <label>Background Intensity</label>
-                    <input type="range" id="m-flow" min="10" max="400" value="120" style="width:100%">
+                    <label style="color:var(--text-dim); font-size:0.8rem">Background Particle Density</label>
+                    <input type="range" id="p-flow" min="20" max="500" value="150" style="width:100%; margin-top:10px">
                 </div>
             </div>
-            <button class="btn" style="margin-top:20px" onclick="showSettings()">APPLY CONFIGURATION</button>
+            <button class="btn-core" style="margin-top:20px" onclick="openMatrix()">APPLY TO CORE</button>
         </div>
     </div>
 
     <script>
         const socket = io();
-        const scroller = document.getElementById('scroller');
-        const userIn = document.getElementById('user-in');
-        const traceView = document.getElementById('trace-view');
-        const fileIn = document.getElementById('file-in');
-        const previewBar = document.getElementById('file-previews');
+        const scroller = document.getElementById('chat-scroller');
+        const userMsg = document.getElementById('user-msg');
+        const telBox = document.getElementById('telemetry-box');
+        const fileRaw = document.getElementById('file-raw');
+        const tray = document.getElementById('file-tray');
         
-        let attached = [];
+        let files = [];
         let botBubble = null;
-        let thinkBox = null;
+        let thoughtBox = null;
 
         marked.setOptions({ highlight: (c) => hljs.highlightAuto(c).value, breaks: true });
 
-        // Background Flow
-        const canvas = document.getElementById('flow-canvas');
+        // Background: Reactive Particle Web
+        const canvas = document.getElementById('neural-canvas');
         const ctx = canvas.getContext('2d');
-        let particles = [];
-        let flowDensity = 120;
-        let flowSpeed = 1;
+        let dots = [];
+        let density = 150;
+        let speed = 1;
 
-        function initFlow() {
+        function initNeural() {
             canvas.width = innerWidth; canvas.height = innerHeight;
-            particles = [];
-            for(let i=0; i<flowDensity; i++) particles.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5), vy: (Math.random()-0.5) });
+            dots = [];
+            for(let i=0; i<density; i++) dots.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5), vy: (Math.random()-0.5) });
         }
-        function drawFlow() {
+        function drawNeural() {
             ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.strokeStyle = "rgba(167, 139, 250, 0.05)";
-            particles.forEach((p, i) => {
-                p.x += p.vx * flowSpeed; p.y += p.vy * flowSpeed;
-                if(p.x<0 || p.x>canvas.width) p.vx*=-1;
-                if(p.y<0 || p.y>canvas.height) p.vy*=-1;
-                particles.forEach((p2, j) => {
+            ctx.strokeStyle = "rgba(139, 92, 246, 0.04)";
+            dots.forEach((d, i) => {
+                d.x += d.vx * speed; d.y += d.vy * speed;
+                if(d.x<0 || d.x>canvas.width) d.vx*=-1;
+                if(d.y<0 || d.y>canvas.height) d.vy*=-1;
+                dots.forEach((d2, j) => {
                     if(i===j) return;
-                    let d = Math.hypot(p.x-p2.x, p.y-p2.y);
-                    if(d < 120) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+                    let dist = Math.hypot(d.x-d2.x, d.y-d2.y);
+                    if(dist < 130) { ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d2.x, d2.y); ctx.stroke(); }
                 });
             });
-            requestAnimationFrame(drawFlow);
+            requestAnimationFrame(drawNeural);
         }
-        initFlow(); drawFlow(); window.onresize = initFlow;
+        initNeural(); drawNeural(); window.onresize = initNeural;
 
-        // Trace Logs
-        socket.on('trace', (d) => {
+        // Telemetry Stream
+        socket.on('telemetry', (d) => {
             const l = document.createElement('div');
-            l.className = 'trace-line';
-            l.innerHTML = `<span class="trace-tag">${d.lvl}</span> ${d.msg}`;
-            traceView.appendChild(l);
-            traceView.scrollTop = traceView.scrollHeight;
+            l.className = 'tel-line';
+            l.innerHTML = `<span class="tel-cat">${d.cat}</span> <span class="tel-msg">${d.msg}</span>`;
+            telBox.appendChild(l);
+            telBox.scrollTop = telBox.scrollHeight;
         });
 
-        // Communication
-        async function send() {
-            const txt = userIn.value.trim();
-            if(!txt && attached.length === 0) return;
+        // Neural Chain Execution
+        function initiateSend() {
+            const txt = userMsg.value.trim();
+            if(!txt && files.length === 0) return;
 
             const row = document.createElement('div');
-            row.style.display = 'flex'; row.style.flexDirection = 'column';
+            row.className = 'msg-container';
             row.innerHTML = `<div class="bubble user-bubble">${txt}</div>`;
             scroller.appendChild(row);
 
             socket.emit('message', { 
                 text: txt, 
-                files: attached,
+                files: files,
                 opts: {
-                    temperature: parseFloat(document.getElementById('m-temp').value),
-                    num_ctx: parseInt(document.getElementById('m-ctx').value)
+                    temperature: parseFloat(document.getElementById('p-temp').value),
+                    num_ctx: parseInt(document.getElementById('p-ctx').value)
                 }
             });
 
-            userIn.value = ''; attached = []; previewBar.style.display = 'none'; previewBar.innerHTML = '';
-            document.getElementById('send-btn').style.display = 'none';
-            document.getElementById('stop-btn').style.display = 'block';
+            userMsg.value = ''; files = []; tray.style.display = 'none'; tray.innerHTML = '';
+            document.getElementById('btn-send').style.display = 'none';
+            document.getElementById('btn-stop').style.display = 'block';
             scroller.scrollTo(0, scroller.scrollHeight);
         }
 
         socket.on('bot', (d) => {
             if(d.type === 'step') {
-                const sl = document.getElementById('status-line');
-                sl.style.display = 'block'; sl.textContent = '● ' + d.content;
+                const sp = document.getElementById('status-pulse');
+                sp.style.display = 'block'; sp.textContent = '● ' + d.content;
             } else if(d.type === 'thought') {
-                if(!thinkBox) {
-                    thinkBox = document.createElement('details');
-                    thinkBox.className = 'think-box';
-                    thinkBox.open = true;
-                    thinkBox.innerHTML = '<summary>NEURAL REASONING</summary><div style="white-space:pre-wrap;"></div>';
-                    scroller.appendChild(thinkBox);
+                if(!thoughtBox) {
+                    thoughtBox = document.createElement('details');
+                    thoughtBox.className = 'thought-trace';
+                    thoughtBox.open = true;
+                    thoughtBox.innerHTML = '<summary>NEURAL PLANNING SEQUENCE</summary><div style="white-space:pre-wrap;"></div>';
+                    scroller.appendChild(thoughtBox);
                 }
-                thinkBox.querySelector('div').textContent += d.content;
+                thoughtBox.querySelector('div').textContent += d.content;
             } else if(d.type === 'stream') {
                 if(!botBubble) {
-                    thinkBox = null;
+                    thoughtBox = null;
                     botBubble = document.createElement('div');
                     botBubble.className = 'bubble bot-bubble';
                     scroller.appendChild(botBubble);
@@ -254,60 +270,64 @@
                 botBubble.innerHTML = marked.parse(botBubble.raw);
                 hljs.highlightAll();
             } else if(d.type === 'end') {
-                botBubble = null; thinkBox = null;
-                document.getElementById('send-btn').style.display = 'block';
-                document.getElementById('stop-btn').style.display = 'none';
-                document.getElementById('status-line').style.display = 'none';
+                botBubble = null; thoughtBox = null;
+                document.getElementById('btn-send').style.display = 'block';
+                document.getElementById('btn-stop').style.display = 'none';
+                document.getElementById('status-pulse').style.display = 'none';
             }
             scroller.scrollTo(0, scroller.scrollHeight);
         });
 
-        // HUD Updates
-        async function updateHUD() {
-            const r = await fetch('/api/status');
-            const d = await r.json();
-            if(d.stats) {
-                document.getElementById('val-cpu').textContent = Math.round(d.stats.cpu) + '%';
-                document.getElementById('val-ram').textContent = Math.round(d.stats.ram) + '%';
-                if(d.stats.gpus.length) document.getElementById('val-gpu').textContent = Math.round(d.stats.gpus[0].load) + '%';
-                flowSpeed = 1 + (d.stats.cpu / 10);
-            }
+        // Hardware Analytics
+        async function refreshMetrics() {
+            try {
+                const res = await fetch('/api/status');
+                const d = await res.json();
+                if(d.metrics) {
+                    const cpu = d.metrics.cpu;
+                    document.getElementById('v-cpu').textContent = Math.round(cpu) + '%';
+                    document.getElementById('b-cpu').style.width = cpu + '%';
+                    document.getElementById('v-ram').textContent = Math.round(d.metrics.ram) + '%';
+                    document.getElementById('b-ram').style.width = d.metrics.ram + '%';
+                    if(d.metrics.gpus.length) {
+                        const gpu = d.metrics.gpus[0];
+                        document.getElementById('v-gpu').textContent = Math.round(gpu.load) + '%';
+                        document.getElementById('b-gpu').style.width = gpu.load + '%';
+                        document.getElementById('v-tmp').textContent = gpu.temp + '°C';
+                    }
+                    speed = 1 + (cpu / 15);
+                }
+            } catch(e) {}
         }
-        setInterval(updateHUD, 2000);
+        setInterval(refreshMetrics, 1500);
 
-        // Files
-        fileIn.addEventListener('change', async (e) => {
-            previewBar.style.display = 'flex';
+        // Atomic Utilities
+        fileRaw.onchange = (e) => {
+            tray.style.display = 'flex';
             for(const f of e.target.files) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    attached.push({ name: f.name, content: ev.target.result, type: f.type });
-                    const card = document.createElement('div');
-                    card.className = 'preview-card';
-                    card.innerHTML = `<span>${f.name}</span>`;
-                    previewBar.appendChild(card);
+                const r = new FileReader();
+                r.onload = (ev) => {
+                    files.push({ name: f.name, content: ev.target.result });
+                    const chip = document.createElement('div');
+                    chip.className = 'file-chip'; chip.textContent = f.name;
+                    tray.appendChild(chip);
                 };
-                if(f.type.startsWith('image/')) reader.readAsDataURL(f);
-                else reader.readAsText(f);
+                r.readAsText(f);
             }
-        });
+        };
 
-        // Utils
-        function showSettings() { 
-            const m = document.getElementById('settings-modal');
-            const isVisible = m.style.display === 'flex';
-            m.style.display = isVisible ? 'none' : 'flex';
-            if(!isVisible) {
-                flowDensity = parseInt(document.getElementById('m-flow').value);
-                initFlow();
-            }
+        function stopProcess() { socket.emit('stop'); }
+        function openMatrix() { 
+            const m = document.getElementById('modal-matrix');
+            const vis = m.style.display === 'flex';
+            m.style.display = vis ? 'none' : 'flex';
+            if(!vis) { density = parseInt(document.getElementById('p-flow').value); initNeural(); }
         }
-        function stop() { socket.emit('stop'); }
-        function purge() { if(confirm('Wipe core history?')) { socket.emit('clear'); scroller.innerHTML = ''; } }
-        function vision() { socket.emit('message', { text: "Provide a detailed visual analysis of my current screen." }); }
+        function purge() { if(confirm('Erase all local memory?')) { socket.emit('clear'); scroller.innerHTML = ''; } }
+        function visionSync() { socket.emit('message', { text: "Perform a high-fidelity vision scan of my workspace." }); }
 
-        userIn.onkeydown = (e) => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-        userIn.oninput = () => { userIn.style.height = 'auto'; userIn.style.height = userIn.scrollHeight + 'px'; };
+        userMsg.onkeydown = (e) => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); initiateSend(); } };
+        userMsg.oninput = () => { userMsg.style.height = 'auto'; userMsg.style.height = userMsg.scrollHeight + 'px'; };
     </script>
 </body>
 </html>
