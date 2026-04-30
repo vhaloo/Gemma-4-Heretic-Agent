@@ -3,103 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemma 4 Heretic Agent</title>
+    <title>Gemma 4 Heretic Pro</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
-            --bg: #09090b;
-            --panel: #111114;
-            --border: #27272a;
-            --accent: #a78bfa;
-            --text: #fafafa;
-            --text-dim: #a1a1aa;
+            --bg: #050507;
+            --panel: rgba(20, 20, 25, 0.7);
+            --border: rgba(255, 255, 255, 0.1);
+            --accent: #c084fc;
+            --accent-glow: rgba(192, 132, 252, 0.4);
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --glass: blur(12px) saturate(180%);
         }
+        
         body { background: var(--bg); color: var(--text); font-family: 'Geist', 'Inter', sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        #sidebar { width: 280px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; gap: 24px; }
-        #main { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
         
-        .tab-btn { background: transparent; border: 1px solid transparent; color: var(--text-dim); padding: 10px 16px; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 500; transition: 0.2s; }
-        .tab-btn.active { background: var(--border); color: var(--accent); border-color: var(--border); }
-        .tab-btn:hover:not(.active) { background: #18181b; color: white; }
+        #sidebar { 
+            width: 260px; background: var(--panel); backdrop-filter: var(--glass);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; gap: 20px;
+        }
 
-        .content-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-        .content-panel.active { display: flex; }
+        #main { flex: 1; display: flex; flex-direction: column; background: radial-gradient(circle at top right, #111115, #050507); position: relative; }
 
-        #chat-window { flex: 1; overflow-y: auto; padding: 40px 10%; display: flex; flex-direction: column; gap: 32px; scroll-behavior: smooth; }
-        .message { line-height: 1.6; max-width: 100%; }
-        .user-message { background: #18181b; padding: 20px; border-radius: 12px; border: 1px solid var(--border); align-self: flex-end; max-width: 85%; }
-        .bot-message { align-self: flex-start; width: 100%; }
+        .nav-item { 
+            background: transparent; border: 1px solid transparent; color: var(--text-dim); 
+            padding: 12px 16px; border-radius: 10px; cursor: pointer; text-align: left; 
+            font-weight: 500; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; align-items: center; gap: 12px;
+        }
+        .nav-item.active { background: rgba(255,255,255,0.05); color: var(--accent); border-color: var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .nav-item:hover:not(.active) { background: rgba(255,255,255,0.03); color: white; }
+
+        .view-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; animation: fadeIn 0.4s ease-out; }
+        .view-panel.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        #chat-window { flex: 1; overflow-y: auto; padding: 40px 15%; display: flex; flex-direction: column; gap: 32px; scroll-behavior: smooth; }
+        .msg-container { width: 100%; display: flex; flex-direction: column; }
+        .message { line-height: 1.7; font-size: 1.05rem; }
+        .user-bubble { background: #1e1e24; padding: 18px 24px; border-radius: 20px 20px 4px 20px; border: 1px solid var(--border); align-self: flex-end; max-width: 80%; }
+        .bot-bubble { align-self: flex-start; width: 100%; }
+
+        #input-zone { padding: 32px 15%; border-top: 1px solid var(--border); backdrop-filter: var(--glass); }
+        #input-box { 
+            background: var(--panel); border: 1px solid var(--border); border-radius: 24px; 
+            padding: 14px 24px; display: flex; align-items: flex-end; gap: 16px;
+            transition: border-color 0.3s;
+        }
+        #input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.1rem; resize: none; min-height: 28px; max-height: 250px; }
+
+        /* Dashboard */
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; padding: 32px; height: 100%; }
+        .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; }
+        .stat-card h3 { margin: 0 0 16px 0; font-size: 1rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Streaming Indicator */
+        .typing { display: flex; gap: 4px; margin-top: 8px; }
+        .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+
+        .btn-action { background: var(--accent); color: #000; font-weight: 700; border: none; padding: 12px 24px; border-radius: 14px; cursor: pointer; transition: 0.2s; }
+        .btn-action:hover { transform: scale(1.02); filter: brightness(1.1); }
         
-        .thought-box { background: #0c0c0e; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
-        .thought-box summary { padding: 12px 16px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); user-select: none; }
-        .thought-box div { padding: 0 16px 16px 16px; font-size: 0.9rem; color: var(--text-dim); white-space: pre-wrap; }
-
-        #input-area { padding: 24px 10%; border-top: 1px solid var(--border); }
-        #input-container { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; display: flex; align-items: flex-end; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1rem; resize: none; min-height: 24px; max-height: 200px; padding: 4px 0; }
+        pre { background: #0c0c10 !important; padding: 20px; border-radius: 16px; border: 1px solid #1a1a20; }
         
-        .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
-        .badge-ok { background: #064e3b; color: #34d399; }
-        .badge-err { background: #450a0a; color: #f87171; }
-
-        /* Models Panel */
-        #models-list { display: flex; flex-direction: column; gap: 12px; padding: 20px; }
-        .model-card { background: var(--panel); border: 1px solid var(--border); padding: 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
-        
-        #pull-container { padding: 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; }
-        input[type="text"] { flex: 1; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; outline: none; }
-        
-        button.primary { background: var(--accent); color: black; font-weight: 600; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
-        button.primary:hover { opacity: 0.9; }
-
-        pre { background: #000 !important; padding: 16px; border-radius: 12px; overflow-x: auto; border: 1px solid #1e1e1e; }
-        code { font-family: 'Fira Code', 'JetBrains Mono', monospace; }
-        .status-line { font-size: 0.8rem; color: var(--accent); margin-bottom: 8px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+        .badge { padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; }
+        .badge-ready { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+        .badge-off { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
     </style>
 </head>
 <body>
     <div id="sidebar">
-        <div>
-            <h2 style="margin: 0 0 8px 0; color: var(--accent)">Gemma 4 Heretic</h2>
-            <div style="display:flex; gap:8px; flex-wrap:wrap">
-                <span id="ollama-status" class="badge badge-err">Ollama Offline</span>
-                <span id="model-status" class="badge badge-err">Model Missing</span>
-            </div>
+        <div style="margin-bottom:10px">
+            <h1 style="margin:0; font-size:1.5rem; background: linear-gradient(45deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">H E R E T I C</h1>
+            <p style="font-size:0.8rem; color:var(--text-dim); margin:4px 0 0 0">Gemma 4 Pro Edition</p>
         </div>
 
-        <nav style="display:flex; flex-direction:column; gap:4px">
-            <button class="tab-btn active" onclick="showTab('chat')">Chat Agent</button>
-            <button class="tab-btn" onclick="showTab('models')">Model Manager</button>
+        <div id="status-group" style="display:flex; flex-direction:column; gap:8px">
+            <div id="ollama-status" class="badge badge-off">Ollama Offline</div>
+            <div id="model-status" class="badge badge-off">Gemma 4 Locked</div>
+        </div>
+
+        <nav style="display:flex; flex-direction:column; gap:6px; margin-top:10px">
+            <button class="nav-item active" onclick="showTab('chat')"><span>💬</span> Neural Chat</button>
+            <button class="nav-item" onclick="showTab('system')"><span>📊</span> System Core</button>
+            <button class="nav-item" onclick="showTab('models')"><span>📦</span> Model Hub</button>
         </nav>
 
         <div style="flex:1"></div>
-        <button class="tab-btn" onclick="clearHistory()" style="color:#f87171">Clear Chat History</button>
-        <div style="font-size: 0.75rem; color: var(--text-dim); text-align:center">Version 1.2.0 • Signed by Vhaloo</div>
+        <div id="voice-toggle" style="display:flex; align-items:center; justify-content:space-between; padding:10px; border:1px solid var(--border); border-radius:12px">
+            <span style="font-size:0.9rem">Audio Sync</span>
+            <input type="checkbox" id="audio-check">
+        </div>
+        <button class="nav-item" onclick="clearHistory()" style="color:#f87171"><span>🧹</span> Wipe Memory</button>
+        <div style="font-size: 0.7rem; color: var(--text-dim); text-align:center">SIGNED: VHALOO</div>
     </div>
 
     <div id="main">
         <!-- Chat Panel -->
-        <div id="panel-chat" class="content-panel active">
+        <div id="panel-chat" class="view-panel active">
             <div id="chat-window"></div>
-            <div id="input-area">
-                <div id="input-container">
-                    <textarea id="user-input" rows="1" placeholder="Type a message or command..."></textarea>
-                    <button class="primary" id="send-btn">Send</button>
+            <div id="input-zone">
+                <div id="input-box">
+                    <button id="vision-btn" class="btn-action" style="padding:10px; background:rgba(255,255,255,0.05); color:white">📷</button>
+                    <textarea id="user-input" rows="1" placeholder="Instruct the heretic..."></textarea>
+                    <button id="send-btn" class="btn-action">SEND</button>
                 </div>
             </div>
         </div>
 
-        <!-- Models Panel -->
-        <div id="panel-models" class="content-panel">
-            <div id="pull-container">
-                <input type="text" id="pull-name" placeholder="Model name (e.g. gemma2)">
-                <button class="primary" onclick="pullModel()">Pull Model</button>
+        <!-- System Panel -->
+        <div id="panel-system" class="view-panel">
+            <div class="stats-grid">
+                <div class="stat-card"><h3>CPU Load</h3><canvas id="cpuChart"></canvas></div>
+                <div class="stat-card"><h3>Memory Core</h3><canvas id="ramChart"></canvas></div>
+                <div class="stat-card"><h3>Disk Matrix</h3><div id="diskInfo" style="margin-top:20px; font-size:1.2rem"></div></div>
+                <div class="stat-card"><h3>Active Cycles</h3><div id="processInfo" style="margin-top:20px; font-size:3rem; font-weight:800; color:var(--accent)">0</div></div>
             </div>
-            <div id="models-list"></div>
+        </div>
+
+        <!-- Models Panel -->
+        <div id="panel-models" class="view-panel">
+            <div style="padding:40px">
+                <h2>Model Management</h2>
+                <div id="models-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:20px"></div>
+            </div>
         </div>
     </div>
 
@@ -107,128 +143,130 @@
         const socket = io();
         const chatWindow = document.getElementById('chat-window');
         const userInput = document.getElementById('user-input');
-        
+        let currentBotMsg = null;
+        let isStreaming = false;
+
         marked.setOptions({
             highlight: (code, lang) => hljs.highlightAuto(code).value,
             breaks: true
         });
 
         function showTab(tab) {
-            document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
             document.getElementById(`panel-${tab}`).classList.add('active');
-            event.target.classList.add('active');
+            event.currentTarget.classList.add('active');
+            if(tab === 'system') initCharts();
         }
 
-        function appendMessage(type, content, isBot = true) {
-            if (type === 'status') {
-                const s = document.createElement('div');
-                s.className = 'status-line';
-                s.id = 'temp-status';
-                s.textContent = '● ' + content;
-                chatWindow.appendChild(s);
-            } else if (type === 'thought') {
-                const t = document.createElement('details');
-                t.className = 'thought-box';
-                t.innerHTML = `<summary>Deep Reasoning Trace</summary><div>${content}</div>`;
-                chatWindow.appendChild(t);
-            } else {
-                document.querySelectorAll('.status-line').forEach(el => el.remove());
-                const div = document.createElement('div');
-                div.className = `message ${isBot ? 'bot-message' : 'user-message'}`;
-                div.innerHTML = isBot ? marked.parse(content) : content;
-                chatWindow.appendChild(div);
-            }
-            chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+        function appendUserMessage(text) {
+            const container = document.createElement('div');
+            container.className = 'msg-container';
+            container.innerHTML = `<div class="message user-bubble">${text}</div>`;
+            chatWindow.appendChild(container);
+            chatWindow.scrollTo(0, chatWindow.scrollHeight);
+        }
+
+        function createBotBubble() {
+            const container = document.createElement('div');
+            container.className = 'msg-container';
+            const bubble = document.createElement('div');
+            bubble.className = 'message bot-bubble';
+            container.appendChild(bubble);
+            chatWindow.appendChild(container);
+            return bubble;
         }
 
         async function sendMessage() {
             const msg = userInput.value.trim();
-            if (!msg) return;
-            appendMessage('text', msg, false);
+            if (!msg || isStreaming) return;
+            
+            appendUserMessage(msg);
             socket.emit('user_message', { message: msg });
+            
             userInput.value = '';
             userInput.style.height = 'auto';
+            isStreaming = true;
+            currentBotMsg = createBotBubble();
         }
 
-        document.getElementById('send-btn').addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+        socket.on('bot_response', (data) => {
+            if (data.type === 'status') {
+                const s = document.createElement('div');
+                s.className = 'status-line';
+                s.textContent = '● ' + data.content;
+                chatWindow.appendChild(s);
+            } else if (data.type === 'stream') {
+                if(!currentBotMsg) currentBotMsg = createBotBubble();
+                currentBotMsg.rawText = (currentBotMsg.rawText || "") + data.content;
+                currentBotMsg.innerHTML = marked.parse(currentBotMsg.rawText);
+                chatWindow.scrollTo(0, chatWindow.scrollHeight);
+                hljs.highlightAll();
+            } else if (data.type === 'stream_end') {
+                isStreaming = false;
+                currentBotMsg = null;
+            } else if (data.type === 'error') {
+                appendUserMessage("ERROR: " + data.content);
+                isStreaming = false;
             }
         });
 
-        function clearHistory() {
-            if(confirm('Clear all chat history?')) {
-                socket.emit('clear_history');
-                chatWindow.innerHTML = '';
-            }
-        }
+        // Charts Logic
+        let cpuChart, ramChart;
+        function initCharts() {
+            if(cpuChart) return;
+            const ctxCpu = document.getElementById('cpuChart').getContext('2d');
+            cpuChart = new Chart(ctxCpu, {
+                type: 'line',
+                data: { labels: Array(20).fill(''), datasets: [{ label: 'CPU %', data: Array(20).fill(0), borderColor: '#c084fc', tension: 0.4 }] },
+                options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
+            });
 
-        socket.on('bot_response', (data) => appendMessage(data.type, data.content));
+            const ctxRam = document.getElementById('ramChart').getContext('2d');
+            ramChart = new Chart(ctxRam, {
+                type: 'doughnut',
+                data: { labels: ['Used', 'Free'], datasets: [{ data: [0, 100], backgroundColor: ['#c084fc', '#1e1e24'] }] },
+                options: { plugins: { legend: { position: 'bottom' } } }
+            });
+        }
 
         async function updateStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                const oS = document.getElementById('ollama-status');
-                const mS = document.getElementById('model-status');
                 
-                oS.textContent = data.ollama ? "Ollama Online" : "Ollama Offline";
-                oS.className = `badge ${data.ollama ? 'badge-ok' : 'badge-err'}`;
+                document.getElementById('ollama-status').textContent = data.ollama ? "Ollama Online" : "Ollama Offline";
+                document.getElementById('ollama-status').className = `badge ${data.ollama ? 'badge-ready' : 'badge-off'}`;
                 
-                mS.textContent = data.model ? "Gemma 4 Ready" : "Model Missing";
-                mS.className = `badge ${data.model ? 'badge-ok' : 'badge-err'}`;
+                document.getElementById('model-status').textContent = data.model ? "Gemma 4 Ready" : "Gemma 4 Locked";
+                document.getElementById('model-status').className = `badge ${data.model ? 'badge-ready' : 'badge-off'}`;
 
-                if (document.getElementById('panel-models').classList.contains('active')) {
-                    renderModels(data.models);
+                if(data.stats) {
+                    if(cpuChart) {
+                        cpuChart.data.datasets[0].data.push(data.stats.cpu_usage);
+                        cpuChart.data.datasets[0].data.shift();
+                        cpuChart.update();
+                    }
+                    if(ramChart) {
+                        const used = data.stats.memory.percent;
+                        ramChart.data.datasets[0].data = [used, 100-used];
+                        ramChart.update();
+                    }
+                    document.getElementById('processInfo').textContent = data.stats.processes;
+                    const disk = data.stats.disk;
+                    document.getElementById('diskInfo').textContent = `${(disk.used / 1e9).toFixed(1)}GB / ${(disk.total / 1e9).toFixed(1)}GB Used`;
                 }
             } catch (e) {}
-        }
-
-        function renderModels(models) {
-            const list = document.getElementById('models-list');
-            list.innerHTML = '<h3>Installed Local Models</h3>';
-            models.forEach(m => {
-                const card = document.createElement('div');
-                card.className = 'model-card';
-                card.innerHTML = `<span>${m}</span> <span class="badge badge-ok">Installed</span>`;
-                list.appendChild(card);
-            });
-        }
-
-        async function pullModel() {
-            const name = document.getElementById('pull-name').value;
-            if(!name) return;
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = "Pulling...";
-            
-            const res = await fetch('/api/pull', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: name })
-            });
-            
-            const reader = res.body.getReader();
-            while(true) {
-                const {done, value} = await reader.read();
-                if(done) break;
-                console.log(new TextDecoder().decode(value));
-            }
-            btn.disabled = false;
-            btn.textContent = "Pull Model";
-            updateStatus();
         }
 
         setInterval(updateStatus, 3000);
         updateStatus();
 
-        userInput.addEventListener('input', () => {
-            userInput.style.height = 'auto';
-            userInput.style.height = (userInput.scrollHeight) + 'px';
-        });
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+        userInput.addEventListener('input', () => { userInput.style.height = 'auto'; userInput.style.height = (userInput.scrollHeight) + 'px'; });
+
+        function clearHistory() { if(confirm('Erase all local memories?')) { socket.emit('clear_history'); chatWindow.innerHTML = ''; } }
     </script>
 </body>
 </html>
