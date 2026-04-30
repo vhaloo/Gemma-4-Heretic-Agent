@@ -3,138 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemma 4 Heretic Ultimate</title>
+    <title>Gemma 4 Heretic God Mode</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
-            --bg: #030305;
-            --panel: rgba(13, 13, 17, 0.85);
-            --border: rgba(147, 51, 234, 0.2);
-            --accent: #a855f7;
-            --accent-glow: rgba(168, 85, 247, 0.3);
-            --text: #f1f5f9;
-            --text-dim: #64748b;
+            --bg: #020204;
+            --panel: rgba(10, 10, 15, 0.95);
+            --border: rgba(139, 92, 246, 0.3);
+            --accent: #a78bfa;
+            --accent-glow: rgba(167, 139, 250, 0.4);
+            --text: #f8fafc;
+            --text-dim: #475569;
+            --danger: #ef4444;
         }
 
         body { 
-            background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui; 
+            background: var(--bg); color: var(--text); font-family: 'Inter', system-ui; 
             margin: 0; display: flex; height: 100vh; overflow: hidden;
-            position: relative;
         }
 
-        /* Neural Flow Background */
-        #neural-canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: -1; pointer-events: none; opacity: 0.6;
-        }
+        /* Neural Canvas */
+        #neural-flow { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
 
         #sidebar { 
-            width: 300px; background: var(--panel); backdrop-filter: blur(20px);
+            width: 320px; background: var(--panel); backdrop-filter: blur(40px);
             border-right: 1px solid var(--border); display: flex; flex-direction: column; 
-            padding: 30px; gap: 24px; z-index: 10;
+            padding: 24px; gap: 20px; z-index: 100;
         }
 
-        #main { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 5; }
+        #main { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 50; }
 
-        .brand h1 { margin: 0; font-size: 1.8rem; letter-spacing: 4px; color: var(--accent); text-shadow: 0 0 15px var(--accent-glow); }
-        .brand p { margin: 4px 0; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
+        .brand h1 { margin: 0; font-size: 1.6rem; letter-spacing: 6px; color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); }
+
+        /* Stop Button */
+        #stop-btn { 
+            background: var(--danger); color: white; border: none; padding: 12px; 
+            border-radius: 12px; font-weight: 800; cursor: pointer; display: none;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+        /* Verbose Console */
+        #verbose-console {
+            background: rgba(0,0,0,0.8); border: 1px solid var(--border); height: 150px;
+            margin-top: auto; border-radius: 12px; overflow-y: auto; padding: 12px;
+            font-family: 'Fira Code', monospace; font-size: 0.7rem; color: #10b981;
+        }
+        .log-entry { margin-bottom: 4px; display: flex; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; }
+        .log-lvl { font-weight: bold; color: var(--accent); }
 
         #chat-window { 
-            flex: 1; overflow-y: auto; padding: 40px 10%; 
-            display: flex; flex-direction: column; gap: 40px;
-            scroll-behavior: smooth;
+            flex: 1; overflow-y: auto; padding: 50px 12%; 
+            display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth;
         }
 
-        /* Message Styling */
-        .msg-wrap { width: 100%; display: flex; flex-direction: column; }
         .bubble { 
-            padding: 24px; border-radius: 16px; line-height: 1.8; font-size: 1.05rem; 
-            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: 0.3s;
+            padding: 24px; border-radius: 20px; line-height: 1.8; font-size: 1.1rem; 
+            background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .user-bubble { 
-            background: rgba(168, 85, 247, 0.1); border-color: var(--border);
-            align-self: flex-end; max-width: 80%; border-radius: 24px 24px 4px 24px;
-        }
-        .bot-bubble { align-self: flex-start; width: 100%; }
+        .user-bubble { background: rgba(139, 92, 246, 0.1); align-self: flex-end; max-width: 85%; border-color: var(--border); }
+        .bot-bubble { align-self: flex-start; width: 100%; position: relative; }
 
-        /* Thinking Process Visibility */
-        .thought-process {
-            background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 20px;
-            border-left: 2px solid var(--accent); padding: 15px; font-size: 0.9rem;
-            color: var(--text-dim); font-family: 'Consolas', monospace;
+        .thought-layer {
+            background: rgba(0, 0, 0, 0.4); border-left: 3px solid var(--accent);
+            padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 0.9rem;
         }
-        .thought-process summary { cursor: pointer; color: var(--accent); font-weight: bold; margin-bottom: 10px; }
+        .thought-layer summary { color: var(--accent); font-weight: bold; cursor: pointer; padding-bottom: 8px; }
 
-        /* Input Area */
-        #input-zone { padding: 40px 10%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
-        #input-shell {
-            background: var(--panel); border: 1px solid var(--border); border-radius: 30px;
-            padding: 10px 24px; display: flex; align-items: center; gap: 15px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        #input-zone { padding: 40px 12%; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); border-top: 1px solid var(--border); }
+        #input-container { 
+            background: var(--panel); border: 1px solid var(--border); border-radius: 35px;
+            padding: 12px 24px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
         }
-        textarea { 
-            flex: 1; background: transparent; border: none; color: white; outline: none; 
-            font-size: 1.1rem; resize: none; min-height: 30px; max-height: 300px;
-        }
+        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.1rem; resize: none; max-height: 300px; }
 
-        /* Settings Modal */
-        .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000;
-            justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background: var(--panel); border: 1px solid var(--border); padding: 40px;
-            border-radius: 24px; width: 500px; display: flex; flex-direction: column; gap: 20px;
-        }
+        /* Stats Grid */
+        .hud-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.75rem; color: var(--text-dim); }
+        .hud-card { background: rgba(255,255,255,0.03); padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
+        .bar-wrap { height: 4px; background: #111; border-radius: 2px; margin-top: 6px; overflow: hidden; }
+        .bar-fill { height: 100%; background: var(--accent); transition: 0.8s; width: 0%; }
 
-        /* Interactive Elements */
-        .icon-btn { 
-            background: rgba(255,255,255,0.05); border: none; color: white; 
-            width: 45px; height: 45px; border-radius: 50%; cursor: pointer;
-            transition: 0.2s; display: flex; align-items: center; justify-content: center;
-        }
-        .icon-btn:hover { background: var(--accent); transform: scale(1.1); }
-        .send-btn { background: var(--accent); color: white; padding: 12px 28px; border-radius: 25px; border: none; font-weight: bold; cursor: pointer; }
+        .icon-btn { background: rgba(255,255,255,0.05); border: none; color: white; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; transition: 0.2s; }
+        .icon-btn:hover { background: var(--accent); color: black; }
+        
+        pre { background: #000 !important; padding: 20px; border-radius: 15px; border: 1px solid #1a1a20; }
+        code { font-family: 'Fira Code', monospace; }
 
-        /* Stats HUD (Discrete) */
-        .hud { font-size: 0.7rem; color: var(--text-dim); display: flex; flex-direction: column; gap: 5px; }
-        .hud-bar { height: 4px; background: #1a1a20; border-radius: 2px; overflow: hidden; margin-top: 3px; }
-        .hud-fill { height: 100%; background: var(--accent); transition: 0.5s; width: 0%; }
-
-        #preview-bar { display: none; padding: 10px; gap: 10px; }
-        .preview-thumb { width: 60px; height: 60px; border-radius: 8px; border: 1px solid var(--accent); }
+        /* Settings */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
+        .modal-body { background: #0a0a0f; border: 1px solid var(--border); padding: 40px; border-radius: 24px; width: 600px; display: flex; flex-direction: column; gap: 20px; }
     </style>
 </head>
 <body>
 
-    <canvas id="neural-canvas"></canvas>
+    <canvas id="neural-flow"></canvas>
 
     <div id="sidebar">
         <div class="brand">
             <h1>HERETIC</h1>
-            <p>Ultimate Neural Interface</p>
+            <p>God Mode Terminal</p>
         </div>
 
-        <div class="hud">
-            <div>CPU EFFORT <span id="val-cpu">0%</span><div class="hud-bar"><div id="bar-cpu" class="hud-fill"></div></div></div>
-            <div>GPU SYNC <span id="val-gpu">0%</span><div class="hud-bar"><div id="bar-gpu" class="hud-fill"></div></div></div>
-            <div>V-RAM LOAD <span id="val-ram">0%</span><div class="hud-bar"><div id="bar-ram" class="hud-fill"></div></div></div>
+        <div class="hud-stats">
+            <div class="hud-card">CPU <span id="txt-cpu">0%</span><div class="bar-wrap"><div id="bar-cpu" class="bar-fill"></div></div></div>
+            <div class="hud-card">GPU <span id="txt-gpu">0%</span><div class="bar-wrap"><div id="bar-gpu" class="bar-fill"></div></div></div>
+            <div class="hud-card">RAM <span id="txt-ram">0%</span><div class="bar-wrap"><div id="bar-ram" class="bar-fill"></div></div></div>
+            <div class="hud-card">NET <span id="txt-net">0 KB</span></div>
         </div>
 
-        <nav style="display:flex; flex-direction:column; gap:10px">
-            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="showSettings()">⚙️ SETTINGS</button>
-            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="clearMem()">🧹 WIPE MEMORY</button>
-            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="takeShot()">📷 VISION CAPTURE</button>
+        <button id="stop-btn" onclick="stopNeural()">STOP CONVERGENCE</button>
+
+        <nav style="display:flex; flex-direction:column; gap:8px">
+            <button class="icon-btn" style="width:100%; border-radius:12px;" onclick="toggleSettings()">NEURAL PARAMETERS</button>
+            <button class="icon-btn" style="width:100%; border-radius:12px;" onclick="wipeMemory()">PURGE CORE HISTORY</button>
+            <button class="icon-btn" style="width:100%; border-radius:12px;" onclick="triggerVision()">SYNC VISION</button>
         </nav>
 
-        <div style="flex:1"></div>
-        <div style="font-size: 0.7rem; color: var(--text-dim); text-align:center; letter-spacing:2px">
-            CONSTRUCTED BY VHALOO
+        <div id="verbose-console">
+            <div class="log-entry"><span class="log-lvl">SYS</span> Initialize God Mode...</div>
+        </div>
+
+        <div style="font-size: 0.6rem; color: var(--text-dim); text-align:center; letter-spacing:3px">
+            VHALOO // NEURAL ARCHITECT
         </div>
     </div>
 
@@ -142,222 +136,166 @@
         <div id="chat-window"></div>
 
         <div id="input-zone">
-            <div id="preview-bar"></div>
-            <div id="input-shell">
-                <input type="file" id="file-input" style="display:none" multiple accept="image/*">
+            <div id="input-container">
+                <input type="file" id="file-input" style="display:none" multiple>
                 <button class="icon-btn" onclick="document.getElementById('file-input').click()">📎</button>
-                <textarea id="user-input" rows="1" placeholder="Issue a high-level command..."></textarea>
-                <button id="send-btn" class="send-btn">SEND</button>
+                <textarea id="user-input" rows="1" placeholder="Enter Command..."></textarea>
+                <button id="send-btn" class="icon-btn" style="background:var(--accent); color:black; width:auto; padding:0 25px; border-radius:25px; font-weight:bold">SEND</button>
             </div>
         </div>
     </div>
 
-    <!-- Settings -->
-    <div id="settings-modal" class="modal">
-        <div class="modal-content">
-            <h2 style="margin-top:0">Neural Parameters</h2>
-            <div style="display:flex; flex-direction:column; gap:15px">
-                <label>Creativity (Temperature)</label>
-                <input type="range" id="param-temp" min="0" max="2" step="0.1" value="0.7">
-                <label>Context Length</label>
-                <input type="number" id="param-ctx" value="32768" style="background:#000; color:#fff; border:1px solid var(--border); padding:10px">
-                <label>Background Flow Density</label>
-                <input type="range" id="param-flow" min="10" max="500" value="100">
-            </div>
-            <button class="send-btn" style="margin-top:20px" onclick="closeSettings()">APPLY CHANGES</button>
+    <div id="modal-settings" class="modal">
+        <div class="modal-body">
+            <h2>Neural Matrix Configuration</h2>
+            <label>Temperature (Creativity)</label>
+            <input type="range" id="cfg-temp" min="0" max="2" step="0.1" value="0.8">
+            <label>Neural Depth (Top P)</label>
+            <input type="range" id="cfg-topp" min="0" max="1" step="0.05" value="0.9">
+            <label>Context Limit</label>
+            <input type="number" id="cfg-ctx" value="32768" style="background:#000; color:#fff; border:1px solid var(--border); padding:10px">
+            <button class="icon-btn" style="width:100%; border-radius:12px; background:var(--accent); color:black" onclick="toggleSettings()">APPLY MATRIX</button>
         </div>
     </div>
 
     <script>
         const socket = io();
-        const chatWindow = document.getElementById('chat-window');
+        const chatWin = document.getElementById('chat-window');
         const userInput = document.getElementById('user-input');
-        const fileInput = document.getElementById('file-input');
-        const previewBar = document.getElementById('preview-bar');
+        const consoleEl = document.getElementById('verbose-console');
+        const stopBtn = document.getElementById('stop-btn');
         
-        let attachedImages = [];
-        let currentBotBubble = null;
-        let currentThoughtBox = null;
+        let currentBotMsg = null;
+        let currentThought = null;
 
-        marked.setOptions({
-            highlight: (code) => hljs.highlightAuto(code).value,
-            breaks: true
+        marked.setOptions({ highlight: (c) => hljs.highlightAuto(c).value, breaks: true });
+
+        // Console Logging
+        socket.on('internal_log', (d) => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-lvl">${d.level}</span> ${d.msg}`;
+            consoleEl.appendChild(entry);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
         });
 
-        // Neural Flow Animation
-        const canvas = document.getElementById('neural-canvas');
+        // Neural Convergence Flow
+        const canvas = document.getElementById('neural-flow');
         const ctx = canvas.getContext('2d');
         let particles = [];
-        let flowDensity = 100;
-        let flowSpeed = 1;
+        let speedMult = 1;
 
         function initParticles() {
             particles = [];
-            for(let i=0; i<flowDensity; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 2,
-                    vy: (Math.random() - 0.5) * 2,
-                    size: Math.random() * 2
-                });
+            for(let i=0; i<150; i++) {
+                particles.push({ x: Math.random()*innerWidth, y: Math.random()*innerHeight, vx: (Math.random()-0.5), vy: (Math.random()-0.5) });
             }
         }
-
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            ctx.strokeStyle = `rgba(168, 85, 247, ${0.1 * flowSpeed})`;
-            ctx.beginPath();
-            particles.forEach((p, i) => {
-                p.x += p.vx * flowSpeed;
-                p.y += p.vy * flowSpeed;
-
-                if(p.x < 0) p.x = canvas.width;
-                if(p.x > canvas.width) p.x = 0;
-                if(p.y < 0) p.y = canvas.height;
-                if(p.y > canvas.height) p.y = 0;
-
-                ctx.moveTo(p.x, p.y);
-                particles.forEach((p2, j) => {
-                    if(i === j) return;
-                    let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
-                    if(dist < 100) {
-                        ctx.lineTo(p2.x, p2.y);
-                    }
-                });
+        function draw() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            ctx.strokeStyle = `rgba(167, 139, 250, 0.05)`;
+            particles.forEach(p => {
+                p.x += p.vx * speedMult; p.y += p.vy * speedMult;
+                if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1, 0, Math.PI*2); ctx.stroke();
             });
-            ctx.stroke();
-            requestAnimationFrame(animate);
+            requestAnimationFrame(draw);
         }
-        initParticles();
-        animate();
+        initParticles(); draw();
 
-        // Chat Logic
-        async function sendMessage() {
+        // Chat Loop
+        function sendMessage() {
             const msg = userInput.value.trim();
-            if(!msg && attachedImages.length === 0) return;
-
+            if(!msg) return;
+            
             const wrap = document.createElement('div');
             wrap.className = 'msg-wrap';
             wrap.innerHTML = `<div class="bubble user-bubble">${msg}</div>`;
-            chatWindow.appendChild(wrap);
+            chatWin.appendChild(wrap);
 
             socket.emit('user_message', { 
                 message: msg, 
-                images: attachedImages,
                 options: {
-                    temperature: parseFloat(document.getElementById('param-temp').value),
-                    num_ctx: parseInt(document.getElementById('param-ctx').value)
+                    temperature: parseFloat(document.getElementById('cfg-temp').value),
+                    top_p: parseFloat(document.getElementById('cfg-topp').value),
+                    num_ctx: parseInt(document.getElementById('cfg-ctx').value)
                 }
             });
 
             userInput.value = '';
-            attachedImages = [];
-            previewBar.style.display = 'none';
-            previewBar.innerHTML = '';
-            chatWindow.scrollTo(0, chatWindow.scrollHeight);
+            stopBtn.style.display = 'block';
+            chatWin.scrollTo(0, chatWin.scrollHeight);
         }
 
         socket.on('bot_response', (data) => {
-            if(data.type === 'status') {
-                const s = document.createElement('div');
-                s.style.color = 'var(--accent)';
-                s.style.fontSize = '0.7rem';
-                s.style.marginBottom = '5px';
-                s.textContent = '> ' + data.content;
-                chatWindow.appendChild(s);
-            } else if(data.type === 'thought_stream') {
-                if(!currentThoughtBox) {
-                    currentThoughtBox = document.createElement('details');
-                    currentThoughtBox.className = 'thought-process';
-                    currentThoughtBox.open = true;
-                    currentThoughtBox.innerHTML = '<summary>NEURAL PLANNING</summary><div></div>';
-                    chatWindow.appendChild(currentThoughtBox);
+            if(data.type === 'thought') {
+                if(!currentThought) {
+                    currentThought = document.createElement('details');
+                    currentThought.className = 'thought-layer';
+                    currentThought.open = true;
+                    currentThought.innerHTML = '<summary>DEEP NEURAL PLANNER</summary><div></div>';
+                    chatWin.appendChild(currentThought);
                 }
-                currentThoughtBox.querySelector('div').textContent += data.content;
+                currentThought.querySelector('div').textContent += data.content;
             } else if(data.type === 'stream') {
-                if(!currentBotBubble) {
-                    currentThoughtBox = null;
-                    const wrap = document.createElement('div');
-                    wrap.className = 'msg-wrap';
-                    currentBotBubble = document.createElement('div');
-                    currentBotBubble.className = 'bubble bot-bubble';
-                    wrap.appendChild(currentBotBubble);
-                    chatWindow.appendChild(wrap);
+                if(!currentBotMsg) {
+                    currentThought = null;
+                    currentBotMsg = document.createElement('div');
+                    currentBotMsg.className = 'bubble bot-bubble';
+                    chatWin.appendChild(currentBotMsg);
                 }
-                currentBotBubble.rawText = (currentBotBubble.rawText || "") + data.content;
-                currentBotBubble.innerHTML = marked.parse(currentBotBubble.rawText);
+                currentBotMsg.raw = (currentBotMsg.raw || "") + data.content;
+                currentBotMsg.innerHTML = marked.parse(currentBotMsg.raw);
                 hljs.highlightAll();
             } else if(data.type === 'stream_end') {
-                currentBotBubble = null;
-                currentThoughtBox = null;
+                currentBotMsg = null;
+                currentThought = null;
+                stopBtn.style.display = 'none';
             }
-            chatWindow.scrollTo(0, chatWindow.scrollHeight);
+            chatWin.scrollTo(0, chatWin.scrollHeight);
         });
 
-        // Stats Update
+        // Stop Control
+        function stopNeural() {
+            socket.emit('stop_generation');
+            stopBtn.style.display = 'none';
+        }
+
+        // Stats HUD
+        let lastNet = 0;
         async function updateHUD() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
+            const res = await fetch('/api/status');
+            const d = await res.json();
+            if(d.stats) {
+                document.getElementById('txt-cpu').textContent = Math.round(d.stats.cpu) + '%';
+                document.getElementById('bar-cpu').style.width = d.stats.cpu + '%';
+                document.getElementById('txt-ram').textContent = Math.round(d.stats.ram) + '%';
+                document.getElementById('bar-ram').style.width = d.stats.ram + '%';
                 
-                if(data.stats) {
-                    const cpu = data.stats.cpu_usage;
-                    const ram = data.stats.memory.percent;
-                    const gpu = data.stats.gpus.length > 0 ? data.stats.gpus[0].load : 0;
+                const gpu = d.stats.gpus.length > 0 ? d.stats.gpus[0].load : 0;
+                document.getElementById('txt-gpu').textContent = Math.round(gpu) + '%';
+                document.getElementById('bar-gpu').style.width = gpu + '%';
 
-                    document.getElementById('val-cpu').textContent = Math.round(cpu) + '%';
-                    document.getElementById('bar-cpu').style.width = cpu + '%';
-                    
-                    document.getElementById('val-gpu').textContent = Math.round(gpu) + '%';
-                    document.getElementById('bar-gpu').style.width = gpu + '%';
+                const netNow = d.stats.net_recv + d.stats.net_sent;
+                const speed = Math.round((netNow - lastNet) / 1024);
+                document.getElementById('txt-net').textContent = speed + ' KB/s';
+                lastNet = netNow;
 
-                    document.getElementById('val-ram').textContent = Math.round(ram) + '%';
-                    document.getElementById('bar-ram').style.width = ram + '%';
-
-                    // React animation to load
-                    flowSpeed = 1 + (cpu / 20);
-                }
-            } catch(e) {}
+                speedMult = 1 + (d.stats.cpu / 15);
+            }
         }
-        setInterval(updateHUD, 2000);
+        setInterval(updateHUD, 1500);
 
-        // UI Helpers
-        function showSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
-        function closeSettings() { 
-            document.getElementById('settings-modal').style.display = 'none'; 
-            flowDensity = parseInt(document.getElementById('param-flow').value);
-            initParticles();
-        }
-        function clearMem() { if(confirm('Erase neural memory?')) { socket.emit('clear_history'); chatWindow.innerHTML = ''; } }
-        function takeShot() { socket.emit('user_message', { message: "Take a screenshot and tell me what you see." }); }
+        // Utils
+        function toggleSettings() { const m = document.getElementById('modal-settings'); m.style.display = (m.style.display === 'flex' ? 'none' : 'flex'); }
+        function wipeMemory() { if(confirm('Purge history?')) { socket.emit('clear_history'); chatWin.innerHTML = ''; } }
+        function triggerVision() { socket.emit('user_message', { message: "Capture screen and analyze." }); }
 
         document.getElementById('send-btn').addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-
-        fileInput.addEventListener('change', (e) => {
-            previewBar.innerHTML = '';
-            previewBar.style.display = 'flex';
-            Array.from(e.target.files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    attachedImages.push(ev.target.result.split(',')[1]);
-                    const img = document.createElement('img');
-                    img.src = ev.target.result;
-                    img.className = 'preview-thumb';
-                    previewBar.appendChild(img);
-                };
-                reader.readAsDataURL(file);
-            });
-        });
-
-        userInput.addEventListener('input', () => {
-            userInput.style.height = 'auto';
-            userInput.style.height = (userInput.scrollHeight) + 'px';
-        });
+        userInput.addEventListener('keydown', (e) => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+        userInput.addEventListener('input', () => { userInput.style.height = 'auto'; userInput.style.height = userInput.scrollHeight + 'px'; });
     </script>
 </body>
 </html>
