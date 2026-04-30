@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omni-Heretic OS | Professional Platform</title>
+    <title>Omni-Heretic OS | Titan 4.0</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
@@ -11,7 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>
         mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-        MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+        MathJax = { tex: { inlineMath: [['$', '$'], ['\(', '\)']] }, svg: { fontCache: 'global' } };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
@@ -78,7 +78,7 @@
         }
         textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1rem; resize: none; max-height: 200px; padding: 5px 0; }
         
-        .tool-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 6px; transition: 0.2s; }
+        .tool-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 6px; transition: 0.2s; font-size: 1.1rem; }
         .tool-btn:hover { background: var(--accent-soft); color: var(--text); }
         .send-btn { background: var(--text); color: var(--bg); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
         .stop-btn { background: var(--danger); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: none; }
@@ -101,13 +101,14 @@
         /* Markdown Styles */
         pre { background: #0d0d0d !important; padding: 20px; border-radius: 8px; border: 1px solid var(--border); position: relative; overflow-x: auto; margin: 15px 0; }
         code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-        .copy-code { position: absolute; top: 10px; right: 10px; background: var(--accent-soft); color: #888; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 0.6rem; cursor: pointer; opacity: 0; }
+        .copy-code { position: absolute; top: 10px; right: 10px; background: var(--accent-soft); color: #888; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 0.6rem; cursor: pointer; opacity: 0; transition: 0.2s; }
         pre:hover .copy-code { opacity: 1; }
+        .copy-code:hover { color: white; background: var(--border); }
         table { border-collapse: collapse; width: 100%; margin: 15px 0; }
         th, td { border: 1px solid var(--border); padding: 10px; font-size: 0.9rem; }
         th { background: var(--accent-soft); }
 
-        /* Settings Modal */
+        /* Modals */
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; align-items: center; justify-content: center; }
         .modal-content { background: #0a0a0a; border: 1px solid var(--border); padding: 40px; border-radius: 12px; width: 700px; display: flex; flex-direction: column; gap: 20px; }
         .modal-content h2 { margin: 0; font-size: 1.5rem; font-weight: 700; }
@@ -127,7 +128,7 @@
         <!-- Sessions Sidebar -->
         <aside class="sessions-bar">
             <div class="session-header">
-                <span style="font-weight: 800; font-size: 0.9rem; letter-spacing: 1px;">OMNI-HERETIC</span>
+                <span style="font-weight: 800; font-size: 0.9rem; letter-spacing: 1px;">TITAN OS</span>
                 <button class="new-chat-btn" onclick="newSession()">NEW</button>
             </div>
             <div id="session-list" class="session-list"></div>
@@ -149,16 +150,18 @@
 
             <div class="input-zone">
                 <div id="input-tray" class="tray"></div>
-                <div style="display:flex; justify-content:flex-end; padding-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; padding-bottom:10px; align-items:center;">
+                    <div style="font-size:0.7rem; color:var(--text-muted);"><span id="token-estimate">0</span> Context Elements</div>
                     <label style="color:var(--text-muted); font-size:0.75rem; display:flex; align-items:center; gap:5px; cursor:pointer;">
-                        <input type="checkbox" id="auto-pilot-toggle" style="accent-color:var(--danger);">
+                        <input type="checkbox" id="auto-pilot-toggle" style="accent-color:var(--danger);"> 
                         Enable Auto-Pilot (100x Loops)
                     </label>
                 </div>
                 <div class="input-box">
-                    <input type="file" id="file-upload" style="display:none" multiple accept="image/*,text/*,.json,.js,.py,.html,.css,.md">
-                    <button class="tool-btn" onclick="document.getElementById('file-upload').click()">📎</button>
-                    <textarea id="main-input" rows="1" placeholder="Type a message or drop files..."></textarea>
+                    <input type="file" id="file-upload" style="display:none" multiple accept="image/*,text/*,.json,.js,.py,.html,.css,.md,.pdf,.docx">
+                    <button class="tool-btn" onclick="document.getElementById('file-upload').click()" title="Attach File">📎</button>
+                    <button class="tool-btn" id="mic-btn" onclick="toggleMic()" title="Voice Dictation">🎤</button>
+                    <textarea id="main-input" rows="1" placeholder="Type a message, drop files, or speak..."></textarea>
                     <button id="send-btn" class="send-btn" onclick="send()">SEND</button>
                     <button id="stop-btn" class="stop-btn" onclick="stop()">STOP</button>
                 </div>
@@ -177,14 +180,21 @@
                 </div>
             </div>
 
-            <div class="card" style="flex:1; display:flex; flex-direction:column;">
+            <div class="card" style="flex:1; display:flex; flex-direction:column; max-height: 30vh;">
                 <div class="card-title">Activity Telemetry</div>
                 <div id="telemetry-box"></div>
             </div>
 
-            <div class="card">
-                <div class="card-title">Project Explorer</div>
-                <div id="file-explorer" style="font-size:0.75rem; color: #666; max-height: 200px; overflow-y: auto;"></div>
+            <div class="card" style="flex:1; display:flex; flex-direction:column;">
+                <div class="card-title" style="display:flex; justify-content:space-between;">
+                    Live Workspace 
+                    <span style="cursor:pointer;" onclick="fetchFileTree()">🔄</span>
+                </div>
+                <div id="file-explorer" style="font-size:0.75rem; color: #666; flex:1; overflow-y: auto;"></div>
+            </div>
+            
+            <div class="card" style="padding: 10px;">
+                <button class="tool-btn" style="width:100%; border: 1px solid var(--border); font-size: 0.75rem; font-weight: bold; padding: 10px;" onclick="viewMemory()">🧠 KNOWLEDGE BASE</button>
             </div>
         </aside>
     </div>
@@ -214,6 +224,17 @@
             </div>
 
             <button class="send-btn" style="width:100%; margin-top:10px;" onclick="saveSettings()">SAVE CONFIGURATION</button>
+        </div>
+    </div>
+
+    <!-- Sandbox Modal -->
+    <div id="sandbox-modal" class="modal">
+        <div class="modal-content" style="width: 90vw; height: 90vh; background: #fff; padding: 0; overflow: hidden; border-radius: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; background: #000; padding: 10px 20px;">
+                <h2 style="color: white; font-size: 1rem;">Artifact Sandbox Preview</h2>
+                <button class="tool-btn" style="color: white;" onclick="document.getElementById('sandbox-modal').style.display='none'">✕</button>
+            </div>
+            <iframe id="sandbox-frame" style="flex:1; width:100%; height: 100%; background:white; border:none;"></iframe>
         </div>
     </div>
 
@@ -261,6 +282,31 @@
         }
         initBg(); drawBg(); window.onresize = initBg;
 
+        // Speech to Text (Voice Control)
+        let recognition;
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRec();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.onresult = (e) => {
+                let transcript = '';
+                for (let i = e.resultIndex; i < e.results.length; ++i) transcript += e.results[i][0].transcript;
+                mainInput.value = transcript;
+                mainInput.style.height = 'auto'; mainInput.style.height = mainInput.scrollHeight + 'px';
+            };
+            recognition.onend = () => {
+                document.getElementById('mic-btn').style.color = 'var(--text-muted)';
+                if(mainInput.value.trim().length > 0) send();
+            };
+        }
+        function toggleMic() {
+            if(!recognition) return alert("Speech recognition not supported in this browser.");
+            const btn = document.getElementById('mic-btn');
+            if(btn.style.color === 'var(--danger)') { recognition.stop(); btn.style.color = 'var(--text-muted)'; } 
+            else { recognition.start(); btn.style.color = 'var(--danger)'; }
+        }
+
         // Messaging
         function send() {
             const text = mainInput.value.trim();
@@ -278,8 +324,9 @@
 
             mainInput.value = '';
             attachments = [];
-            tray.innerHTML = '';
+            renderTray();
             mainInput.style.height = 'auto';
+            document.getElementById('token-estimate').textContent = '0';
             
             document.getElementById('send-btn').style.display = 'none';
             document.getElementById('stop-btn').style.display = 'block';
@@ -307,7 +354,7 @@
             container.querySelectorAll('pre').forEach(pre => {
                 const b = document.createElement('button');
                 b.className = 'copy-code'; b.textContent = 'COPY';
-                b.onclick = () => { navigator.clipboard.writeText(pre.innerText); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
+                b.onclick = () => { navigator.clipboard.writeText(pre.innerText.replace('COPY','').replace('RUN','').trim()); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
                 pre.appendChild(b);
             });
 
@@ -343,10 +390,31 @@
                 bubble.innerHTML = marked.parse(bubble.raw);
                 
                 bubble.querySelectorAll('pre').forEach(pre => {
-                    if(!pre.querySelector('.copy-code')) {
+                    if(!pre.querySelector('.copy-code.copy')) {
                         const b = document.createElement('button');
-                        b.className = 'copy-code'; b.textContent = 'COPY';
-                        b.onclick = () => { navigator.clipboard.writeText(pre.innerText.replace('COPY','').trim()); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
+                        b.className = 'copy-code copy'; b.textContent = 'COPY';
+                        b.onclick = () => { navigator.clipboard.writeText(pre.innerText.replace('COPY','').replace('RUN','').trim()); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
+                        pre.appendChild(b);
+                    }
+                });
+
+                // Sandbox Support
+                bubble.querySelectorAll('pre code.language-html, pre code.language-javascript').forEach(block => {
+                    const pre = block.parentElement;
+                    if(!pre.querySelector('.run-code')) {
+                        const b = document.createElement('button');
+                        b.className = 'copy-code run-code'; 
+                        b.style.right = '65px';
+                        b.textContent = 'RUN';
+                        b.onclick = () => {
+                            const code = pre.innerText.replace('COPY','').replace('RUN','').trim();
+                            const type = block.className.includes('html') ? 'html' : 'js';
+                            const modal = document.getElementById('sandbox-modal');
+                            const frame = document.getElementById('sandbox-frame');
+                            modal.style.display = 'flex';
+                            if(type === 'html') frame.srcdoc = code;
+                            else frame.srcdoc = `<html><body><script>${code}<\/script><u005C/body><u005C/html>`;
+                        };
                         pre.appendChild(b);
                     }
                 });
@@ -366,7 +434,7 @@
                 });
 
                 hljs.highlightAll();
-                if(window.MathJax) MathJax.typesetPromise([container || agentMsg || bubble]).catch(()=>{});
+                if(window.MathJax) MathJax.typesetPromise([agentMsg || bubble]).catch(()=>{});
                 scroller.scrollTop = scroller.scrollHeight;
             } else if(d.type === 'end') {
                 agentMsg = null; reasoning = null;
@@ -420,6 +488,60 @@
             });
         });
 
+        // Live File Explorer
+        async function fetchFileTree() {
+            try {
+                const res = await fetch('/api/fs/tree');
+                const tree = await res.json();
+                const explorer = document.getElementById('file-explorer');
+                explorer.innerHTML = '';
+                explorer.appendChild(buildTreeDOM(tree, 0));
+            } catch(e) {}
+        }
+        function buildTreeDOM(nodes, depth) {
+            const div = document.createElement('div');
+            nodes.forEach(n => {
+                const item = document.createElement('div');
+                item.style.paddingLeft = (depth * 15) + 'px';
+                item.style.paddingTop = '6px';
+                item.style.paddingBottom = '6px';
+                item.style.cursor = 'pointer';
+                item.style.whiteSpace = 'nowrap';
+                item.style.overflow = 'hidden';
+                item.style.textOverflow = 'ellipsis';
+                item.style.transition = '0.2s';
+                item.style.borderRadius = '4px';
+                item.onmouseover = () => { item.style.background = 'var(--accent-soft)'; item.style.color = 'var(--text)'; };
+                item.onmouseout = () => { item.style.background = 'transparent'; item.style.color = '#666'; };
+                item.innerHTML = `<span style="opacity:0.7">${n.is_dir ? '📁' : '📄'}</span> ${n.name}`;
+                item.onclick = async (e) => {
+                    e.stopPropagation();
+                    if(n.is_dir) {
+                        // Dir click logic if needed
+                    } else {
+                        if(confirm(`Attach ${n.name} to chat?`)) {
+                            const res = await fetch('/api/fs/read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:n.path})});
+                            const data = await res.json();
+                            if(data.content) {
+                                attachments.push({name: n.name, type: 'text/plain', content: data.content});
+                                renderTray();
+                                updateTokenCount();
+                            }
+                        }
+                    }
+                };
+                div.appendChild(item);
+                if(n.children && n.children.length > 0) {
+                    div.appendChild(buildTreeDOM(n.children, depth + 1));
+                }
+            });
+            return div;
+        }
+        
+        function viewMemory() {
+            socket.emit('message', { text: "Read the MEMORY.md file and summarize our current persistent knowledge.", sid: currentSid });
+        }
+
         // Telemetry & Metrics
         socket.on('telemetry', (d) => {
             const el = document.createElement('div');
@@ -437,22 +559,12 @@
                 document.getElementById('m-ram').textContent = Math.round(d.metrics.ram) + '%';
                 document.getElementById('m-disk').textContent = d.metrics.disk + '%';
                 if(d.metrics.gpus.length) document.getElementById('m-gpu').textContent = Math.round(d.metrics.gpus[0].load) + '%';
-                
-                // Explorer Update (Simplified)
-                const explorer = document.getElementById('file-explorer');
-                explorer.innerHTML = '';
-                // We'd need a dedicated API for real explorer, but status gives sessions which is a start
-                d.sessions.forEach(s => {
-                    const el = document.createElement('div');
-                    el.style.padding = '2px 0';
-                    el.textContent = `📁 session/${s}.json`;
-                    explorer.appendChild(el);
-                });
             } catch(e) {}
         }
         setInterval(syncStatus, 3000);
         syncStatus();
         updateSessions();
+        fetchFileTree(); // Initial file tree load
 
         // Settings
         async function toggleSettings() {
@@ -490,33 +602,45 @@
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     attachments.push({ name: f.name, type: f.type, content: ev.target.result });
-                    const item = document.createElement('div');
-                    item.className = 'tray-item';
-                    if(f.type.startsWith('image/')) item.innerHTML = `<img src="${ev.target.result}"><div class="remove" onclick="removeFile('${f.name}')">✕</div>`;
-                    else item.innerHTML = `<div class="file-pill" style="height:60px; display:flex; align-items:center;">${f.name}</div><div class="remove" onclick="removeFile('${f.name}')">✕</div>`;
-                    tray.appendChild(item);
+                    renderTray();
+                    updateTokenCount();
                 };
                 if(f.type.startsWith('image/')) reader.readAsDataURL(f);
-                else reader.readAsText(f);
+                else reader.readAsDataURL(f); // For pdf/docx logic in backend, passing as b64 data url is safest
             }
         };
 
-        function removeFile(name) {
-            attachments = attachments.filter(a => a.name !== name);
+        function renderTray() {
             tray.innerHTML = '';
             attachments.forEach(a => {
                 const item = document.createElement('div');
                 item.className = 'tray-item';
-                if(a.type.startsWith('image/')) item.innerHTML = `<img src="${a.content}"><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
+                if(a.type && a.type.startsWith('image/')) item.innerHTML = `<img src="${a.content}"><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
                 else item.innerHTML = `<div class="file-pill" style="height:60px; display:flex; align-items:center;">${a.name}</div><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
                 tray.appendChild(item);
             });
         }
 
+        function removeFile(name) {
+            attachments = attachments.filter(a => a.name !== name);
+            renderTray();
+            updateTokenCount();
+        }
+
+        function updateTokenCount() {
+            let est = mainInput.value.length / 4;
+            attachments.forEach(a => est += (a.content.length / 4));
+            document.getElementById('token-estimate').textContent = Math.round(est).toLocaleString();
+        }
+
         function stop() { socket.emit('stop'); }
 
         mainInput.onkeydown = (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-        mainInput.oninput = () => { mainInput.style.height = 'auto'; mainInput.style.height = mainInput.scrollHeight + 'px'; };
+        mainInput.oninput = () => { 
+            mainInput.style.height = 'auto'; 
+            mainInput.style.height = mainInput.scrollHeight + 'px'; 
+            updateTokenCount();
+        };
     </script>
 </body>
 </html>
