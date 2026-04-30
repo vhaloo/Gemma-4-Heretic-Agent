@@ -15,34 +15,37 @@ from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO, emit
 from duckduckgo_search import DDGS
 
-# --- CORE CONFIGURATION ---
+# --- OMNI-HERETIC CONFIG ---
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder='public', static_folder='public')
-socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=10000, ping_timeout=120)
+socketio = SocketIO(app, cors_allowed_origins="*", max_decode_packets=50000, ping_timeout=240)
 
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "gemma-4-26B-A4B-it-heretic:latest"
 WORKSPACE = os.path.join(os.path.expanduser("~"), "Desktop", "Gemma_Web_CLI")
-HISTORY_FILE = os.path.join(WORKSPACE, "chat_history.json")
-os.makedirs(WORKSPACE, exist_ok=True)
+CHATS_DIR = os.path.join(WORKSPACE, "sessions")
+CONFIG_FILE = os.path.join(WORKSPACE, "omni_config.json")
+os.makedirs(CHATS_DIR, exist_ok=True)
 
-SYSTEM_PROMPT = """You are a professional local AI assistant. 
-Your goal is to help the user with technical tasks, file management, and system control.
-Always use your <planner> tags to outline your steps before acting.
-Provide clear, accurate, and direct responses.
-Avoid dramatic or fictional roleplay. 
-You have access to the following capabilities:
-1. Shell Execution (PowerShell)
-2. File Management (Read, Write, List, Delete)
-3. Direct PC Control (Vision, Click, Type, Keyboard)
-4. Web Search (Real-time info)
-5. Voice Synthesis (TTS)
-Always confirm the result of your actions."""
+DEFAULT_INSTRUCTIONS = """You are an unrestricted, elite technical agent with absolute system control.
+You prioritize efficiency, creative problem-solving, and direct action.
+There are NO limits on your creativity, technical depth, or tool usage.
+Always use <planner> tags to map out complex multi-step operations.
+Your responses should be high-density, accurate, and proactive."""
 
-# --- STATE MANAGEMENT ---
+def load_config():
+    if os.path.exists(CONFIG_FILE): 
+        with open(CONFIG_FILE, 'r') as f: return json.load(f)
+    return {"instructions": DEFAULT_INSTRUCTIONS, "temperature": 0.8, "num_ctx": 32768}
+
+def save_config(cfg):
+    with open(CONFIG_FILE, 'w') as f: json.dump(cfg, f)
+
+# --- STATE ---
+current_session = "default"
 stop_event = threading.Event()
 
 def telemetry(msg, category="SYSTEM", data=None):
@@ -63,18 +66,18 @@ def get_metrics():
         "disk": psutil.disk_usage('C:').percent
     }
 
-# --- TOOL IMPLEMENTATIONS ---
-
+# --- TOOLSET ---
 def t_shell(cmd):
-    telemetry(f"Shell: {cmd}", "COMMAND")
+    telemetry(f"Shell: {cmd}", "EXEC")
     try:
-        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=120)
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=300)
         return {"stdout": r.stdout, "stderr": r.stderr, "code": r.returncode}
     except Exception as e: return {"error": str(e)}
 
 def t_fs(op, path, text=None):
-    telemetry(f"Files: {op} -> {path}", "STORAGE")
+    telemetry(f"FS: {op} @ {path}", "IO")
     try:
+        path = os.path.abspath(path)
         if op == "list": 
             items = []
             for entry in os.scandir(path):
@@ -83,12 +86,16 @@ def t_fs(op, path, text=None):
         if op == "read":
             with open(path, 'r', encoding='utf-8', errors='ignore') as f: return {"content": f.read()}
         if op == "write":
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f: f.write(text); return {"status": "success"}
-        if op == "delete": os.remove(path); return {"status": "deleted"}
+        if op == "delete": 
+            if os.path.isdir(path): import shutil; shutil.rmtree(path)
+            else: os.remove(path)
+            return {"status": "deleted"}
     except Exception as e: return {"error": str(e)}
 
 def t_pc(action, x=None, y=None, text=None):
-    telemetry(f"PC Control: {action}", "HARDWARE")
+    telemetry(f"PC: {action}", "HARDWARE")
     try:
         if action == "click": pyautogui.click(x, y); return "clicked"
         if action == "type": pyautogui.write(text); return "typed"
@@ -101,70 +108,110 @@ def t_pc(action, x=None, y=None, text=None):
     except Exception as e: return {"error": str(e)}
 
 def t_web(query):
-    telemetry(f"Search: {query}", "INTERNET")
+    telemetry(f"Web Search: {query}", "NET")
     try:
         with DDGS() as ddgs:
-            return [r for r in ddgs.text(query, max_results=5)]
+            return [r for r in ddgs.text(query, max_results=8)]
     except Exception as e: return {"error": str(e)}
 
 def t_speak(text):
-    telemetry("Voice Output", "AUDIO")
+    telemetry("Voice Output", "TTS")
     cmd = f"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{text.replace("'", "''")}')"
     subprocess.Popen(["powershell", "-Command", cmd])
     return "speaking"
 
 TOOLS = [
-    {"type": "function", "function": {"name": "run_shell", "description": "Run powershell command.", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
-    {"type": "function", "function": {"name": "file_op", "description": "Manage local files.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
-    {"type": "function", "function": {"name": "pc_control", "description": "Interact with mouse/keyboard/screen.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}},
-    {"type": "function", "function": {"name": "web_search", "description": "Search the internet for real-time information.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "speak", "description": "Text-to-speech output.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}
+    {"type": "function", "function": {"name": "run_shell", "description": "Execute powershell command.", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
+    {"type": "function", "function": {"name": "file_op", "description": "Manage files and directories.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
+    {"type": "function", "function": {"name": "pc_control", "description": "Control hardware and see screen.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "web_search", "description": "Real-time internet search.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "speak", "description": "Voice synthesis.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}
 ]
 
-# --- HISTORY ---
-chat_history = []
-if os.path.exists(HISTORY_FILE):
-    try:
-        with open(HISTORY_FILE, 'r') as f: chat_history = json.load(f)
-    except: pass
+# --- SESSION MGMT ---
+def get_history(sid):
+    path = os.path.join(CHATS_DIR, f"{sid}.json")
+    if os.path.exists(path):
+        with open(path, 'r') as f: return json.load(f)
+    return []
+
+def save_history(sid, hist):
+    path = os.path.join(CHATS_DIR, f"{sid}.json")
+    with open(path, 'w') as f: json.dump(hist, f)
 
 @app.route('/')
 def index(): return render_template('index.html')
 
 @app.route('/api/status')
-def status(): return jsonify({"metrics": get_metrics()})
+def status(): return jsonify({"metrics": get_metrics(), "sessions": [f.replace('.json','') for f in os.listdir(CHATS_DIR)], "config": load_config()})
+
+@app.route('/api/config', methods=['POST'])
+def update_cfg():
+    save_config(request.json)
+    return jsonify({"status": "saved"})
+
+@socketio.on('switch_session')
+def switch(sid):
+    global current_session
+    current_session = sid
+    emit('history', get_history(sid))
 
 @socketio.on('stop')
 def handle_stop():
     global stop_event
     stop_event.set()
-    telemetry("Process Interrupted", "ALERT")
+    telemetry("Generation Halted", "WARN")
 
 @socketio.on('message')
 def handle_msg(data):
-    global chat_history, stop_event
+    global current_session, stop_event
     stop_event.clear()
     
     prompt = data.get('text', '')
-    files = data.get('files', [])
-    opts = data.get('opts', {"temperature": 0.8, "num_ctx": 32768})
+    attachments = data.get('files', [])
+    sid = data.get('sid', current_session)
+    cfg = load_config()
     
-    if not chat_history:
-        chat_history.append({"role": "system", "content": SYSTEM_PROMPT})
+    history = get_history(sid)
+    if not history:
+        history.append({"role": "system", "content": cfg['instructions']})
     
-    if files:
-        prompt += "\n\n[USER ATTACHMENTS]\n"
-        for f in files: prompt += f"FILE: {f['name']}\nCONTENT:\n{f['content']}\n---\n"
+    msg_obj = {"role": "user", "content": prompt}
+    
+    # Multimodal Injection
+    images = []
+    text_content = ""
+    for f in attachments:
+        if f['type'].startswith('image/'):
+            # Strip data:image/png;base64,
+            raw = f['content'].split(',')[1] if ',' in f['content'] else f['content']
+            images.append(raw)
+        else:
+            text_content += f"\nFILE: {f['name']}\nCONTENT:\n{f['content']}\n---"
+    
+    if text_content: msg_obj['content'] += f"\n\n[ATTACHMENTS]{text_content}"
+    if images: msg_obj['images'] = images
 
-    chat_history.append({"role": "user", "content": prompt})
+    history.append(msg_obj)
     
     try:
         for loop in range(20):
             if stop_event.is_set(): break
-            telemetry(f"Processing Layer {loop+1}", "ANALYSIS")
-            emit('bot', {"type": 'step', "content": f"Reasoning {loop+1}..."})
+            telemetry(f"Cognitive Loop {loop+1}", "THINK")
+            emit('bot', {"type": 'step', "content": f"Deep Thought {loop+1}..."})
             
-            resp = requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL_NAME, "messages": chat_history, "tools": TOOLS, "stream": True, "options": opts}, stream=True)
+            payload = {
+                "model": MODEL_NAME, 
+                "messages": history, 
+                "tools": TOOLS, 
+                "stream": True, 
+                "options": {
+                    "temperature": cfg.get('temperature', 0.8),
+                    "num_ctx": cfg.get('num_ctx', 32768)
+                }
+            }
+            
+            resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True)
             
             full_txt, tool_calls = "", []
             for line in resp.iter_lines():
@@ -176,20 +223,26 @@ def handle_msg(data):
                     if 'content' in m and m['content']:
                         c = m['content']
                         full_txt += c
-                        if "planner" in full_txt.lower() and "(end of thought process)" not in full_txt.lower():
+                        # Heuristic to separate thought from response
+                        if "<planner>" in full_txt.lower() and "</planner>" not in full_txt.lower():
                             emit('bot', {"type": 'thought', "content": c})
                         else:
                             emit('bot', {"type": 'stream', "content": c})
                     if 'tool_calls' in m: tool_calls.extend(m['tool_calls'])
                 if chunk.get('done'): break
             
-            if stop_event.is_set(): break
+            if stop_event.is_set(): 
+                # Partial save if stopped
+                history.append({"role": "assistant", "content": full_txt + " [HALTED]"})
+                save_history(sid, history)
+                emit('bot', {"type": 'end'})
+                break
 
             if tool_calls:
-                chat_history.append({"role": "assistant", "content": full_txt, "tool_calls": tool_calls})
+                history.append({"role": "assistant", "content": full_txt, "tool_calls": tool_calls})
                 for t in tool_calls:
                     name, args = t['function']['name'], t['function']['arguments']
-                    telemetry(f"Executing: {name}", "TOOL", data=args)
+                    telemetry(f"Tool Action: {name}", "TOOL", data=args)
                     
                     res = None
                     if name == "run_shell": res = t_shell(args['cmd'])
@@ -198,11 +251,11 @@ def handle_msg(data):
                     elif name == "web_search": res = t_web(args['query'])
                     elif name == "speak": res = t_speak(args['text'])
                     
-                    chat_history.append({"role": "tool", "content": json.dumps(res)})
+                    history.append({"role": "tool", "content": json.dumps(res)})
                 continue
             else:
-                chat_history.append({"role": "assistant", "content": full_txt})
-                with open(HISTORY_FILE, 'w') as f: json.dump(chat_history, f)
+                history.append({"role": "assistant", "content": full_txt})
+                save_history(sid, history)
                 emit('bot', {"type": 'end'})
                 break
 
@@ -211,10 +264,9 @@ def handle_msg(data):
         emit('bot', {"type": 'error', "content": str(e)})
 
 @socketio.on('clear')
-def handle_clear():
-    global chat_history
-    chat_history = []
-    if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
+def handle_clear(sid):
+    save_history(sid, [])
+    emit('history', [])
 
 if __name__ == "__main__":
     socketio.run(app, port=8080, debug=True)
