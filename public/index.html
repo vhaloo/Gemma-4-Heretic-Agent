@@ -3,139 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemma 4 Heretic Pro</title>
+    <title>Gemma 4 Heretic Ultimate</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
-            --bg: #050507;
-            --panel: rgba(20, 20, 25, 0.7);
-            --border: rgba(255, 255, 255, 0.1);
-            --accent: #c084fc;
-            --accent-glow: rgba(192, 132, 252, 0.4);
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
-            --glass: blur(12px) saturate(180%);
+            --bg: #030305;
+            --panel: rgba(13, 13, 17, 0.85);
+            --border: rgba(147, 51, 234, 0.2);
+            --accent: #a855f7;
+            --accent-glow: rgba(168, 85, 247, 0.3);
+            --text: #f1f5f9;
+            --text-dim: #64748b;
         }
-        
-        body { background: var(--bg); color: var(--text); font-family: 'Geist', 'Inter', sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        
+
+        body { 
+            background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui; 
+            margin: 0; display: flex; height: 100vh; overflow: hidden;
+            position: relative;
+        }
+
+        /* Neural Flow Background */
+        #neural-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; pointer-events: none; opacity: 0.6;
+        }
+
         #sidebar { 
-            width: 260px; background: var(--panel); backdrop-filter: var(--glass);
-            border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; gap: 20px;
+            width: 300px; background: var(--panel); backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column; 
+            padding: 30px; gap: 24px; z-index: 10;
         }
 
-        #main { flex: 1; display: flex; flex-direction: column; background: radial-gradient(circle at top right, #111115, #050507); position: relative; }
+        #main { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 5; }
 
-        .nav-item { 
-            background: transparent; border: 1px solid transparent; color: var(--text-dim); 
-            padding: 12px 16px; border-radius: 10px; cursor: pointer; text-align: left; 
-            font-weight: 500; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex; align-items: center; gap: 12px;
+        .brand h1 { margin: 0; font-size: 1.8rem; letter-spacing: 4px; color: var(--accent); text-shadow: 0 0 15px var(--accent-glow); }
+        .brand p { margin: 4px 0; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; }
+
+        #chat-window { 
+            flex: 1; overflow-y: auto; padding: 40px 10%; 
+            display: flex; flex-direction: column; gap: 40px;
+            scroll-behavior: smooth;
         }
-        .nav-item.active { background: rgba(255,255,255,0.05); color: var(--accent); border-color: var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        .nav-item:hover:not(.active) { background: rgba(255,255,255,0.03); color: white; }
 
-        .view-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; animation: fadeIn 0.4s ease-out; }
-        .view-panel.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        #chat-window { flex: 1; overflow-y: auto; padding: 40px 15%; display: flex; flex-direction: column; gap: 32px; scroll-behavior: smooth; }
-        .msg-container { width: 100%; display: flex; flex-direction: column; }
-        .message { line-height: 1.7; font-size: 1.05rem; }
-        .user-bubble { background: #1e1e24; padding: 18px 24px; border-radius: 20px 20px 4px 20px; border: 1px solid var(--border); align-self: flex-end; max-width: 80%; }
+        /* Message Styling */
+        .msg-wrap { width: 100%; display: flex; flex-direction: column; }
+        .bubble { 
+            padding: 24px; border-radius: 16px; line-height: 1.8; font-size: 1.05rem; 
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: 0.3s;
+        }
+        .user-bubble { 
+            background: rgba(168, 85, 247, 0.1); border-color: var(--border);
+            align-self: flex-end; max-width: 80%; border-radius: 24px 24px 4px 24px;
+        }
         .bot-bubble { align-self: flex-start; width: 100%; }
 
-        #input-zone { padding: 32px 15%; border-top: 1px solid var(--border); backdrop-filter: var(--glass); }
-        #input-box { 
-            background: var(--panel); border: 1px solid var(--border); border-radius: 24px; 
-            padding: 14px 24px; display: flex; align-items: flex-end; gap: 16px;
-            transition: border-color 0.3s;
+        /* Thinking Process Visibility */
+        .thought-process {
+            background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 20px;
+            border-left: 2px solid var(--accent); padding: 15px; font-size: 0.9rem;
+            color: var(--text-dim); font-family: 'Consolas', monospace;
         }
-        #input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
-        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.1rem; resize: none; min-height: 28px; max-height: 250px; }
+        .thought-process summary { cursor: pointer; color: var(--accent); font-weight: bold; margin-bottom: 10px; }
 
-        /* Dashboard */
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; padding: 32px; height: 100%; }
-        .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; }
-        .stat-card h3 { margin: 0 0 16px 0; font-size: 1rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        /* Input Area */
+        #input-zone { padding: 40px 10%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
+        #input-shell {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 30px;
+            padding: 10px 24px; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        textarea { 
+            flex: 1; background: transparent; border: none; color: white; outline: none; 
+            font-size: 1.1rem; resize: none; min-height: 30px; max-height: 300px;
+        }
 
-        /* Streaming Indicator */
-        .typing { display: flex; gap: 4px; margin-top: 8px; }
-        .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 1.5s infinite; }
-        .dot:nth-child(2) { animation-delay: 0.2s; }
-        .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
+        /* Settings Modal */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--panel); border: 1px solid var(--border); padding: 40px;
+            border-radius: 24px; width: 500px; display: flex; flex-direction: column; gap: 20px;
+        }
 
-        .btn-action { background: var(--accent); color: #000; font-weight: 700; border: none; padding: 12px 24px; border-radius: 14px; cursor: pointer; transition: 0.2s; }
-        .btn-action:hover { transform: scale(1.02); filter: brightness(1.1); }
-        
-        pre { background: #0c0c10 !important; padding: 20px; border-radius: 16px; border: 1px solid #1a1a20; }
-        
-        .badge { padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; }
-        .badge-ready { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
-        .badge-off { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+        /* Interactive Elements */
+        .icon-btn { 
+            background: rgba(255,255,255,0.05); border: none; color: white; 
+            width: 45px; height: 45px; border-radius: 50%; cursor: pointer;
+            transition: 0.2s; display: flex; align-items: center; justify-content: center;
+        }
+        .icon-btn:hover { background: var(--accent); transform: scale(1.1); }
+        .send-btn { background: var(--accent); color: white; padding: 12px 28px; border-radius: 25px; border: none; font-weight: bold; cursor: pointer; }
+
+        /* Stats HUD (Discrete) */
+        .hud { font-size: 0.7rem; color: var(--text-dim); display: flex; flex-direction: column; gap: 5px; }
+        .hud-bar { height: 4px; background: #1a1a20; border-radius: 2px; overflow: hidden; margin-top: 3px; }
+        .hud-fill { height: 100%; background: var(--accent); transition: 0.5s; width: 0%; }
+
+        #preview-bar { display: none; padding: 10px; gap: 10px; }
+        .preview-thumb { width: 60px; height: 60px; border-radius: 8px; border: 1px solid var(--accent); }
     </style>
 </head>
 <body>
+
+    <canvas id="neural-canvas"></canvas>
+
     <div id="sidebar">
-        <div style="margin-bottom:10px">
-            <h1 style="margin:0; font-size:1.5rem; background: linear-gradient(45deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">H E R E T I C</h1>
-            <p style="font-size:0.8rem; color:var(--text-dim); margin:4px 0 0 0">Gemma 4 Pro Edition</p>
+        <div class="brand">
+            <h1>HERETIC</h1>
+            <p>Ultimate Neural Interface</p>
         </div>
 
-        <div id="status-group" style="display:flex; flex-direction:column; gap:8px">
-            <div id="ollama-status" class="badge badge-off">Ollama Offline</div>
-            <div id="model-status" class="badge badge-off">Gemma 4 Locked</div>
+        <div class="hud">
+            <div>CPU EFFORT <span id="val-cpu">0%</span><div class="hud-bar"><div id="bar-cpu" class="hud-fill"></div></div></div>
+            <div>GPU SYNC <span id="val-gpu">0%</span><div class="hud-bar"><div id="bar-gpu" class="hud-fill"></div></div></div>
+            <div>V-RAM LOAD <span id="val-ram">0%</span><div class="hud-bar"><div id="bar-ram" class="hud-fill"></div></div></div>
         </div>
 
-        <nav style="display:flex; flex-direction:column; gap:6px; margin-top:10px">
-            <button class="nav-item active" onclick="showTab('chat')"><span>💬</span> Neural Chat</button>
-            <button class="nav-item" onclick="showTab('system')"><span>📊</span> System Core</button>
-            <button class="nav-item" onclick="showTab('models')"><span>📦</span> Model Hub</button>
+        <nav style="display:flex; flex-direction:column; gap:10px">
+            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="showSettings()">⚙️ SETTINGS</button>
+            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="clearMem()">🧹 WIPE MEMORY</button>
+            <button class="icon-btn" style="width:100%; border-radius:12px; font-weight:bold" onclick="takeShot()">📷 VISION CAPTURE</button>
         </nav>
 
         <div style="flex:1"></div>
-        <div id="voice-toggle" style="display:flex; align-items:center; justify-content:space-between; padding:10px; border:1px solid var(--border); border-radius:12px">
-            <span style="font-size:0.9rem">Audio Sync</span>
-            <input type="checkbox" id="audio-check">
+        <div style="font-size: 0.7rem; color: var(--text-dim); text-align:center; letter-spacing:2px">
+            CONSTRUCTED BY VHALOO
         </div>
-        <button class="nav-item" onclick="clearHistory()" style="color:#f87171"><span>🧹</span> Wipe Memory</button>
-        <div style="font-size: 0.7rem; color: var(--text-dim); text-align:center">SIGNED: VHALOO</div>
     </div>
 
     <div id="main">
-        <!-- Chat Panel -->
-        <div id="panel-chat" class="view-panel active">
-            <div id="chat-window"></div>
-            <div id="input-zone">
-                <div id="input-box">
-                    <button id="vision-btn" class="btn-action" style="padding:10px; background:rgba(255,255,255,0.05); color:white">📷</button>
-                    <textarea id="user-input" rows="1" placeholder="Instruct the heretic..."></textarea>
-                    <button id="send-btn" class="btn-action">SEND</button>
-                </div>
+        <div id="chat-window"></div>
+
+        <div id="input-zone">
+            <div id="preview-bar"></div>
+            <div id="input-shell">
+                <input type="file" id="file-input" style="display:none" multiple accept="image/*">
+                <button class="icon-btn" onclick="document.getElementById('file-input').click()">📎</button>
+                <textarea id="user-input" rows="1" placeholder="Issue a high-level command..."></textarea>
+                <button id="send-btn" class="send-btn">SEND</button>
             </div>
         </div>
+    </div>
 
-        <!-- System Panel -->
-        <div id="panel-system" class="view-panel">
-            <div class="stats-grid">
-                <div class="stat-card"><h3>CPU Load</h3><canvas id="cpuChart"></canvas></div>
-                <div class="stat-card"><h3>Memory Core</h3><canvas id="ramChart"></canvas></div>
-                <div class="stat-card"><h3>Disk Matrix</h3><div id="diskInfo" style="margin-top:20px; font-size:1.2rem"></div></div>
-                <div class="stat-card"><h3>Active Cycles</h3><div id="processInfo" style="margin-top:20px; font-size:3rem; font-weight:800; color:var(--accent)">0</div></div>
+    <!-- Settings -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-top:0">Neural Parameters</h2>
+            <div style="display:flex; flex-direction:column; gap:15px">
+                <label>Creativity (Temperature)</label>
+                <input type="range" id="param-temp" min="0" max="2" step="0.1" value="0.7">
+                <label>Context Length</label>
+                <input type="number" id="param-ctx" value="32768" style="background:#000; color:#fff; border:1px solid var(--border); padding:10px">
+                <label>Background Flow Density</label>
+                <input type="range" id="param-flow" min="10" max="500" value="100">
             </div>
-        </div>
-
-        <!-- Models Panel -->
-        <div id="panel-models" class="view-panel">
-            <div style="padding:40px">
-                <h2>Model Management</h2>
-                <div id="models-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:20px"></div>
-            </div>
+            <button class="send-btn" style="margin-top:20px" onclick="closeSettings()">APPLY CHANGES</button>
         </div>
     </div>
 
@@ -143,130 +172,192 @@
         const socket = io();
         const chatWindow = document.getElementById('chat-window');
         const userInput = document.getElementById('user-input');
-        let currentBotMsg = null;
-        let isStreaming = false;
+        const fileInput = document.getElementById('file-input');
+        const previewBar = document.getElementById('preview-bar');
+        
+        let attachedImages = [];
+        let currentBotBubble = null;
+        let currentThoughtBox = null;
 
         marked.setOptions({
-            highlight: (code, lang) => hljs.highlightAuto(code).value,
+            highlight: (code) => hljs.highlightAuto(code).value,
             breaks: true
         });
 
-        function showTab(tab) {
-            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-            document.getElementById(`panel-${tab}`).classList.add('active');
-            event.currentTarget.classList.add('active');
-            if(tab === 'system') initCharts();
+        // Neural Flow Animation
+        const canvas = document.getElementById('neural-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let flowDensity = 100;
+        let flowSpeed = 1;
+
+        function initParticles() {
+            particles = [];
+            for(let i=0; i<flowDensity; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    size: Math.random() * 2
+                });
+            }
         }
 
-        function appendUserMessage(text) {
-            const container = document.createElement('div');
-            container.className = 'msg-container';
-            container.innerHTML = `<div class="message user-bubble">${text}</div>`;
-            chatWindow.appendChild(container);
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            ctx.strokeStyle = `rgba(168, 85, 247, ${0.1 * flowSpeed})`;
+            ctx.beginPath();
+            particles.forEach((p, i) => {
+                p.x += p.vx * flowSpeed;
+                p.y += p.vy * flowSpeed;
+
+                if(p.x < 0) p.x = canvas.width;
+                if(p.x > canvas.width) p.x = 0;
+                if(p.y < 0) p.y = canvas.height;
+                if(p.y > canvas.height) p.y = 0;
+
+                ctx.moveTo(p.x, p.y);
+                particles.forEach((p2, j) => {
+                    if(i === j) return;
+                    let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+                    if(dist < 100) {
+                        ctx.lineTo(p2.x, p2.y);
+                    }
+                });
+            });
+            ctx.stroke();
+            requestAnimationFrame(animate);
+        }
+        initParticles();
+        animate();
+
+        // Chat Logic
+        async function sendMessage() {
+            const msg = userInput.value.trim();
+            if(!msg && attachedImages.length === 0) return;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'msg-wrap';
+            wrap.innerHTML = `<div class="bubble user-bubble">${msg}</div>`;
+            chatWindow.appendChild(wrap);
+
+            socket.emit('user_message', { 
+                message: msg, 
+                images: attachedImages,
+                options: {
+                    temperature: parseFloat(document.getElementById('param-temp').value),
+                    num_ctx: parseInt(document.getElementById('param-ctx').value)
+                }
+            });
+
+            userInput.value = '';
+            attachedImages = [];
+            previewBar.style.display = 'none';
+            previewBar.innerHTML = '';
             chatWindow.scrollTo(0, chatWindow.scrollHeight);
         }
 
-        function createBotBubble() {
-            const container = document.createElement('div');
-            container.className = 'msg-container';
-            const bubble = document.createElement('div');
-            bubble.className = 'message bot-bubble';
-            container.appendChild(bubble);
-            chatWindow.appendChild(container);
-            return bubble;
-        }
-
-        async function sendMessage() {
-            const msg = userInput.value.trim();
-            if (!msg || isStreaming) return;
-            
-            appendUserMessage(msg);
-            socket.emit('user_message', { message: msg });
-            
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            isStreaming = true;
-            currentBotMsg = createBotBubble();
-        }
-
         socket.on('bot_response', (data) => {
-            if (data.type === 'status') {
+            if(data.type === 'status') {
                 const s = document.createElement('div');
-                s.className = 'status-line';
-                s.textContent = '● ' + data.content;
+                s.style.color = 'var(--accent)';
+                s.style.fontSize = '0.7rem';
+                s.style.marginBottom = '5px';
+                s.textContent = '> ' + data.content;
                 chatWindow.appendChild(s);
-            } else if (data.type === 'stream') {
-                if(!currentBotMsg) currentBotMsg = createBotBubble();
-                currentBotMsg.rawText = (currentBotMsg.rawText || "") + data.content;
-                currentBotMsg.innerHTML = marked.parse(currentBotMsg.rawText);
-                chatWindow.scrollTo(0, chatWindow.scrollHeight);
+            } else if(data.type === 'thought_stream') {
+                if(!currentThoughtBox) {
+                    currentThoughtBox = document.createElement('details');
+                    currentThoughtBox.className = 'thought-process';
+                    currentThoughtBox.open = true;
+                    currentThoughtBox.innerHTML = '<summary>NEURAL PLANNING</summary><div></div>';
+                    chatWindow.appendChild(currentThoughtBox);
+                }
+                currentThoughtBox.querySelector('div').textContent += data.content;
+            } else if(data.type === 'stream') {
+                if(!currentBotBubble) {
+                    currentThoughtBox = null;
+                    const wrap = document.createElement('div');
+                    wrap.className = 'msg-wrap';
+                    currentBotBubble = document.createElement('div');
+                    currentBotBubble.className = 'bubble bot-bubble';
+                    wrap.appendChild(currentBotBubble);
+                    chatWindow.appendChild(wrap);
+                }
+                currentBotBubble.rawText = (currentBotBubble.rawText || "") + data.content;
+                currentBotBubble.innerHTML = marked.parse(currentBotBubble.rawText);
                 hljs.highlightAll();
-            } else if (data.type === 'stream_end') {
-                isStreaming = false;
-                currentBotMsg = null;
-            } else if (data.type === 'error') {
-                appendUserMessage("ERROR: " + data.content);
-                isStreaming = false;
+            } else if(data.type === 'stream_end') {
+                currentBotBubble = null;
+                currentThoughtBox = null;
             }
+            chatWindow.scrollTo(0, chatWindow.scrollHeight);
         });
 
-        // Charts Logic
-        let cpuChart, ramChart;
-        function initCharts() {
-            if(cpuChart) return;
-            const ctxCpu = document.getElementById('cpuChart').getContext('2d');
-            cpuChart = new Chart(ctxCpu, {
-                type: 'line',
-                data: { labels: Array(20).fill(''), datasets: [{ label: 'CPU %', data: Array(20).fill(0), borderColor: '#c084fc', tension: 0.4 }] },
-                options: { scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
-            });
-
-            const ctxRam = document.getElementById('ramChart').getContext('2d');
-            ramChart = new Chart(ctxRam, {
-                type: 'doughnut',
-                data: { labels: ['Used', 'Free'], datasets: [{ data: [0, 100], backgroundColor: ['#c084fc', '#1e1e24'] }] },
-                options: { plugins: { legend: { position: 'bottom' } } }
-            });
-        }
-
-        async function updateStatus() {
+        // Stats Update
+        async function updateHUD() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 
-                document.getElementById('ollama-status').textContent = data.ollama ? "Ollama Online" : "Ollama Offline";
-                document.getElementById('ollama-status').className = `badge ${data.ollama ? 'badge-ready' : 'badge-off'}`;
-                
-                document.getElementById('model-status').textContent = data.model ? "Gemma 4 Ready" : "Gemma 4 Locked";
-                document.getElementById('model-status').className = `badge ${data.model ? 'badge-ready' : 'badge-off'}`;
-
                 if(data.stats) {
-                    if(cpuChart) {
-                        cpuChart.data.datasets[0].data.push(data.stats.cpu_usage);
-                        cpuChart.data.datasets[0].data.shift();
-                        cpuChart.update();
-                    }
-                    if(ramChart) {
-                        const used = data.stats.memory.percent;
-                        ramChart.data.datasets[0].data = [used, 100-used];
-                        ramChart.update();
-                    }
-                    document.getElementById('processInfo').textContent = data.stats.processes;
-                    const disk = data.stats.disk;
-                    document.getElementById('diskInfo').textContent = `${(disk.used / 1e9).toFixed(1)}GB / ${(disk.total / 1e9).toFixed(1)}GB Used`;
-                }
-            } catch (e) {}
-        }
+                    const cpu = data.stats.cpu_usage;
+                    const ram = data.stats.memory.percent;
+                    const gpu = data.stats.gpus.length > 0 ? data.stats.gpus[0].load : 0;
 
-        setInterval(updateStatus, 3000);
-        updateStatus();
+                    document.getElementById('val-cpu').textContent = Math.round(cpu) + '%';
+                    document.getElementById('bar-cpu').style.width = cpu + '%';
+                    
+                    document.getElementById('val-gpu').textContent = Math.round(gpu) + '%';
+                    document.getElementById('bar-gpu').style.width = gpu + '%';
+
+                    document.getElementById('val-ram').textContent = Math.round(ram) + '%';
+                    document.getElementById('bar-ram').style.width = ram + '%';
+
+                    // React animation to load
+                    flowSpeed = 1 + (cpu / 20);
+                }
+            } catch(e) {}
+        }
+        setInterval(updateHUD, 2000);
+
+        // UI Helpers
+        function showSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+        function closeSettings() { 
+            document.getElementById('settings-modal').style.display = 'none'; 
+            flowDensity = parseInt(document.getElementById('param-flow').value);
+            initParticles();
+        }
+        function clearMem() { if(confirm('Erase neural memory?')) { socket.emit('clear_history'); chatWindow.innerHTML = ''; } }
+        function takeShot() { socket.emit('user_message', { message: "Take a screenshot and tell me what you see." }); }
 
         document.getElementById('send-btn').addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-        userInput.addEventListener('input', () => { userInput.style.height = 'auto'; userInput.style.height = (userInput.scrollHeight) + 'px'; });
+        userInput.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 
-        function clearHistory() { if(confirm('Erase all local memories?')) { socket.emit('clear_history'); chatWindow.innerHTML = ''; } }
+        fileInput.addEventListener('change', (e) => {
+            previewBar.innerHTML = '';
+            previewBar.style.display = 'flex';
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    attachedImages.push(ev.target.result.split(',')[1]);
+                    const img = document.createElement('img');
+                    img.src = ev.target.result;
+                    img.className = 'preview-thumb';
+                    previewBar.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        userInput.addEventListener('input', () => {
+            userInput.style.height = 'auto';
+            userInput.style.height = (userInput.scrollHeight) + 'px';
+        });
     </script>
 </body>
 </html>
