@@ -3,239 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Heretic OS | Neural Interface</title>
+    <title>Heretic OS | Pro Interface</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
-            --bg: #050508;
-            --panel: rgba(13, 13, 18, 0.8);
-            --accent: #8b5cf6;
-            --accent-glow: rgba(139, 92, 246, 0.3);
-            --border: rgba(255, 255, 255, 0.08);
-            --text: #e2e8f0;
-            --text-dim: #64748b;
+            --bg: #030305;
+            --panel: rgba(10, 10, 15, 0.9);
+            --border: rgba(139, 92, 246, 0.2);
+            --accent: #a78bfa;
+            --accent-dim: rgba(167, 139, 250, 0.1);
+            --text: #f8fafc;
+            --text-dim: #475569;
         }
 
-        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+        body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        /* Animated Background */
-        #neural-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+        /* Animated Flow */
+        #flow-canvas { position: fixed; inset: 0; z-index: -1; opacity: 0.5; }
 
-        .app-container { display: flex; height: 100vh; backdrop-filter: blur(10px); }
+        .app { display: flex; height: 100vh; backdrop-filter: blur(15px); }
 
-        /* Sidebar: Files & Stats */
-        .sidebar { 
-            width: 320px; background: var(--panel); border-right: 1px solid var(--border); 
-            display: flex; flex-direction: column; gap: 20px; padding: 24px;
+        /* Left Side: System Control */
+        .side { 
+            width: 340px; background: var(--panel); border-right: 1px solid var(--border); 
+            display: flex; flex-direction: column; padding: 30px; gap: 24px;
         }
 
-        .brand h1 { margin: 0; font-size: 1.5rem; letter-spacing: 4px; color: var(--accent); font-weight: 900; }
-        .brand p { margin: 4px 0; font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; }
+        .brand h1 { margin: 0; font-size: 1.8rem; letter-spacing: 5px; color: var(--accent); text-shadow: 0 0 20px var(--accent-dim); }
 
-        .stats-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 12px; border-radius: 12px; }
-        .stat-card label { font-size: 0.6rem; color: var(--text-dim); display: block; margin-bottom: 4px; }
-        .stat-card span { font-size: 1rem; font-weight: bold; color: var(--accent); }
-        .progress-mini { height: 3px; background: #111; border-radius: 2px; margin-top: 6px; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: 0.5s; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat { background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 15px; border-radius: 15px; }
+        .stat label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .stat div { font-size: 1.1rem; font-weight: 800; color: var(--accent); margin-top: 5px; }
 
-        /* Chat Area */
-        .main-view { flex: 1; display: flex; flex-direction: column; position: relative; }
-        
-        #chat-scroller { flex: 1; overflow-y: auto; padding: 60px 15%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
-        
-        .msg-row { width: 100%; display: flex; flex-direction: column; }
-        .bubble { 
-            padding: 24px; border-radius: 20px; line-height: 1.8; font-size: 1.1rem;
-            background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+        /* System Trace Console */
+        #trace-view { 
+            background: rgba(0,0,0,0.5); border: 1px solid var(--border); height: 200px;
+            border-radius: 12px; overflow-y: auto; padding: 15px; font-family: 'Fira Code', monospace; font-size: 0.7rem;
         }
-        .user-bubble { align-self: flex-end; max-width: 80%; background: rgba(139, 92, 246, 0.1); border-color: var(--accent); }
+        .trace-line { margin-bottom: 4px; display: flex; gap: 10px; opacity: 0.8; }
+        .trace-tag { font-weight: bold; color: var(--accent); min-width: 50px; }
+
+        /* Main Chat Area */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        #scroller { flex: 1; overflow-y: auto; padding: 60px 10%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
+
+        .bubble { padding: 25px; border-radius: 24px; line-height: 1.8; font-size: 1.1rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); position: relative; }
+        .user-bubble { align-self: flex-end; max-width: 80%; background: var(--accent-dim); border-color: var(--accent); border-radius: 24px 24px 4px 24px; }
         .bot-bubble { align-self: flex-start; width: 100%; }
 
-        /* Thinking & Steps */
-        .thought-wrap { 
-            background: rgba(0,0,0,0.3); border-left: 2px solid var(--accent); 
-            padding: 15px; margin-bottom: 15px; border-radius: 4px; font-size: 0.9rem; color: var(--text-dim);
-        }
-        .step-ticker { color: var(--accent); font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .think-box { background: rgba(0,0,0,0.3); border-left: 3px solid var(--accent); padding: 20px; margin-bottom: 20px; border-radius: 8px; font-size: 0.95rem; }
+        .think-box summary { cursor: pointer; color: var(--accent); font-weight: 800; margin-bottom: 10px; }
 
-        /* Input Zone */
-        .input-zone { padding: 40px 15%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.4); }
+        /* Advanced Input */
+        .input-area { padding: 40px 10%; border-top: 1px solid var(--border); background: rgba(0,0,0,0.4); }
+        
+        #file-previews { display: none; gap: 12px; padding-bottom: 15px; flex-wrap: wrap; }
+        .preview-card { background: var(--panel); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px; }
+        .preview-card button { background: none; border: none; color: #ef4444; cursor: pointer; font-weight: bold; }
+
         .input-shell {
             background: var(--panel); border: 1px solid var(--border); border-radius: 40px;
-            padding: 12px 28px; display: flex; align-items: center; gap: 15px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            padding: 12px 30px; display: flex; align-items: center; gap: 20px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
-        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.1rem; resize: none; max-height: 250px; }
-        
-        .action-btn { background: var(--accent); color: white; border: none; padding: 12px 30px; border-radius: 25px; font-weight: 800; cursor: pointer; transition: 0.2s; }
-        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--accent-glow); }
-        .stop-btn { background: #ef4444; display: none; }
+        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.15rem; resize: none; max-height: 300px; }
 
-        .icon-only { background: transparent; color: var(--text-dim); cursor: pointer; border: none; font-size: 1.2rem; display: flex; align-items: center; }
-        .icon-only:hover { color: white; }
+        .btn { background: var(--accent); color: black; border: none; padding: 12px 35px; border-radius: 25px; font-weight: 900; cursor: pointer; transition: 0.3s; }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 0 20px var(--accent-dim); }
+        .btn-stop { background: #ef4444; display: none; color: white; }
 
-        /* Scrollers */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .icon-btn { background: rgba(255,255,255,0.05); border: none; color: white; width: 48px; height: 48px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+        .icon-btn:hover { background: var(--accent); color: black; }
+
+        /* Settings Modal */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
+        .modal-inner { background: #0a0a10; border: 1px solid var(--border); padding: 40px; border-radius: 30px; width: 600px; display: flex; flex-direction: column; gap: 20px; }
     </style>
 </head>
 <body>
 
-    <canvas id="neural-bg"></canvas>
+    <canvas id="flow-canvas"></canvas>
 
-    <div class="app-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+    <div class="app">
+        <aside class="side">
             <div class="brand">
                 <h1>HERETIC</h1>
-                <p>Advanced Neural Interface</p>
+                <p>Pro System Interface</p>
             </div>
 
-            <div class="stats-box">
-                <div class="stat-card">
-                    <label>CORES</label><span id="cpu-val">0%</span>
-                    <div class="progress-mini"><div id="cpu-bar" class="progress-fill"></div></div>
-                </div>
-                <div class="stat-card">
-                    <label>NEURAL</label><span id="gpu-val">0%</span>
-                    <div class="progress-mini"><div id="gpu-bar" class="progress-fill"></div></div>
-                </div>
-                <div class="stat-card">
-                    <label>SYNAPSE</label><span id="ram-val">0%</span>
-                    <div class="progress-mini"><div id="ram-bar" class="progress-fill"></div></div>
-                </div>
-                <div class="stat-card">
-                    <label>CORE TEMP</label><span id="tmp-val">0°C</span>
-                </div>
+            <div class="stats-grid">
+                <div class="stat"><label>CPU</label><div id="val-cpu">0%</div></div>
+                <div class="stat"><label>GPU</label><div id="val-gpu">0%</div></div>
+                <div class="stat"><label>RAM</label><div id="val-ram">0%</div></div>
+                <div class="stat"><label>LINK</label><div style="color:#10b981">READY</div></div>
             </div>
 
-            <div style="flex:1; overflow-y:auto;">
-                <p style="font-size:0.7rem; color:var(--text-dim); margin-bottom:10px;">SYSTEM CAPABILITIES</p>
-                <ul style="list-style:none; padding:0; font-size:0.85rem; color:var(--text-dim); display:flex; flex-direction:column; gap:12px;">
-                    <li>👁️ High-Fidelity Vision</li>
-                    <li>🖱️ Direct OS Control</li>
-                    <li>📂 Deep File Analytics</li>
-                    <li>💻 Multi-Thread Shell</li>
-                </ul>
+            <nav style="display:flex; flex-direction:column; gap:10px">
+                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="showSettings()">⚙️ ADVANCED MATRIX</button>
+                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="purge()">🧹 PURGE HISTORY</button>
+                <button class="icon-btn" style="width:100%; border-radius:15px; font-size:0.9rem; font-weight:bold" onclick="vision()">📷 SYNC VISION</button>
+            </nav>
+
+            <div id="trace-view">
+                <div class="trace-line"><span class="trace-tag">SYS</span> Core Initialized.</div>
             </div>
 
-            <button class="action-btn" style="width:100%; border-radius:14px; background:rgba(255,255,255,0.05);" onclick="clearAll()">PURGE MEMORY</button>
-            <div style="font-size: 0.6rem; color: var(--text-dim); text-align:center; letter-spacing:2px">CONSTRUCTED BY VHALOO</div>
+            <div style="text-align:center; font-size:0.6rem; color:var(--text-dim); letter-spacing:4px; margin-top:auto">VHALOO // ARCHITECT</div>
         </aside>
 
-        <!-- Main View -->
-        <main class="main-view">
-            <div id="chat-scroller"></div>
+        <main class="main">
+            <div id="scroller"></div>
 
-            <div class="input-zone">
-                <div id="status-line" class="step-ticker" style="margin-bottom:10px; display:none;">NEURAL LAYER READY</div>
+            <div class="input-area">
+                <div id="file-previews"></div>
+                <div id="status-line" style="font-size:0.8rem; color:var(--accent); margin-bottom:10px; display:none; font-weight:bold">● ANALYZING...</div>
                 <div class="input-shell">
-                    <button class="icon-only" onclick="triggerVision()">📷</button>
-                    <textarea id="user-input" rows="1" placeholder="Issue a neural command..."></textarea>
-                    <button id="stop-btn" class="action-btn stop-btn" onclick="stopNeural()">STOP</button>
-                    <button id="send-btn" class="action-btn" onclick="sendMsg()">SEND</button>
+                    <input type="file" id="file-in" style="display:none" multiple>
+                    <button class="icon-btn" onclick="document.getElementById('file-in').click()">📎</button>
+                    <textarea id="user-in" rows="1" placeholder="Enter High-Level Instruction..."></textarea>
+                    <button id="stop-btn" class="btn btn-stop" onclick="stop()">STOP</button>
+                    <button id="send-btn" class="btn" onclick="send()">SEND</button>
                 </div>
             </div>
         </main>
     </div>
 
+    <div id="settings-modal" class="modal">
+        <div class="modal-inner">
+            <h2>Neural Matrix Configuration</h2>
+            <div style="display:flex; flex-direction:column; gap:20px">
+                <div>
+                    <label>Temperature (Creativity: 0.0 - 2.0)</label>
+                    <input type="range" id="m-temp" min="0" max="2" step="0.1" value="0.8" style="width:100%">
+                </div>
+                <div>
+                    <label>Context Limit (Max: 131072)</label>
+                    <input type="number" id="m-ctx" value="32768" style="width:100%; background:#000; color:#fff; border:1px solid var(--border); padding:10px">
+                </div>
+                <div>
+                    <label>Background Intensity</label>
+                    <input type="range" id="m-flow" min="10" max="400" value="120" style="width:100%">
+                </div>
+            </div>
+            <button class="btn" style="margin-top:20px" onclick="showSettings()">APPLY CONFIGURATION</button>
+        </div>
+    </div>
+
     <script>
         const socket = io();
-        const scroller = document.getElementById('chat-scroller');
-        const input = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-        const stopBtn = document.getElementById('stop-btn');
-        const statusLine = document.getElementById('status-line');
-
+        const scroller = document.getElementById('scroller');
+        const userIn = document.getElementById('user-in');
+        const traceView = document.getElementById('trace-view');
+        const fileIn = document.getElementById('file-in');
+        const previewBar = document.getElementById('file-previews');
+        
+        let attached = [];
         let botBubble = null;
-        let thoughtBox = null;
+        let thinkBox = null;
 
         marked.setOptions({ highlight: (c) => hljs.highlightAuto(c).value, breaks: true });
 
-        // Background Animation
-        const canvas = document.getElementById('neural-bg');
+        // Background Flow
+        const canvas = document.getElementById('flow-canvas');
         const ctx = canvas.getContext('2d');
-        let dots = [];
-        function initBg() {
-            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            dots = [];
-            for(let i=0; i<100; i++) dots.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5), vy: (Math.random()-0.5) });
+        let particles = [];
+        let flowDensity = 120;
+        let flowSpeed = 1;
+
+        function initFlow() {
+            canvas.width = innerWidth; canvas.height = innerHeight;
+            particles = [];
+            for(let i=0; i<flowDensity; i++) particles.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5), vy: (Math.random()-0.5) });
         }
-        function drawBg() {
+        function drawFlow() {
             ctx.clearRect(0,0,canvas.width,canvas.height);
-            ctx.strokeStyle = "rgba(139, 92, 246, 0.08)";
-            ctx.lineWidth = 1;
-            dots.forEach((d, i) => {
-                d.x += d.vx; d.y += d.vy;
-                if(d.x<0 || d.x>canvas.width) d.vx*=-1;
-                if(d.y<0 || d.y>canvas.height) d.vy*=-1;
-                dots.forEach((d2, j) => {
+            ctx.strokeStyle = "rgba(167, 139, 250, 0.05)";
+            particles.forEach((p, i) => {
+                p.x += p.vx * flowSpeed; p.y += p.vy * flowSpeed;
+                if(p.x<0 || p.x>canvas.width) p.vx*=-1;
+                if(p.y<0 || p.y>canvas.height) p.vy*=-1;
+                particles.forEach((p2, j) => {
                     if(i===j) return;
-                    let dist = Math.hypot(d.x-d2.x, d.y-d2.y);
-                    if(dist < 150) {
-                        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d2.x, d2.y); ctx.stroke();
-                    }
+                    let d = Math.hypot(p.x-p2.x, p.y-p2.y);
+                    if(d < 120) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
                 });
             });
-            requestAnimationFrame(drawBg);
+            requestAnimationFrame(drawFlow);
         }
-        initBg(); drawBg(); window.onresize = initBg;
+        initFlow(); drawFlow(); window.onresize = initFlow;
 
-        // Interaction
-        function sendMsg() {
-            const txt = input.value.trim();
-            if(!txt) return;
-            appendMsg('user', txt);
-            socket.emit('message', { text: txt });
-            input.value = ''; input.style.height = 'auto';
-            sendBtn.style.display = 'none'; stopBtn.style.display = 'block';
-        }
+        // Trace Logs
+        socket.on('trace', (d) => {
+            const l = document.createElement('div');
+            l.className = 'trace-line';
+            l.innerHTML = `<span class="trace-tag">${d.lvl}</span> ${d.msg}`;
+            traceView.appendChild(l);
+            traceView.scrollTop = traceView.scrollHeight;
+        });
 
-        function appendMsg(role, content) {
+        // Communication
+        async function send() {
+            const txt = userIn.value.trim();
+            if(!txt && attached.length === 0) return;
+
             const row = document.createElement('div');
-            row.className = 'msg-row';
-            row.innerHTML = `<div class="bubble ${role}-bubble">${content}</div>`;
+            row.style.display = 'flex'; row.style.flexDirection = 'column';
+            row.innerHTML = `<div class="bubble user-bubble">${txt}</div>`;
             scroller.appendChild(row);
-            scroller.scrollTop = scroller.scrollHeight;
+
+            socket.emit('message', { 
+                text: txt, 
+                files: attached,
+                opts: {
+                    temperature: parseFloat(document.getElementById('m-temp').value),
+                    num_ctx: parseInt(document.getElementById('m-ctx').value)
+                }
+            });
+
+            userIn.value = ''; attached = []; previewBar.style.display = 'none'; previewBar.innerHTML = '';
+            document.getElementById('send-btn').style.display = 'none';
+            document.getElementById('stop-btn').style.display = 'block';
+            scroller.scrollTo(0, scroller.scrollHeight);
         }
 
         socket.on('bot', (d) => {
             if(d.type === 'step') {
-                statusLine.style.display = 'block';
-                statusLine.textContent = '● ' + d.content;
+                const sl = document.getElementById('status-line');
+                sl.style.display = 'block'; sl.textContent = '● ' + d.content;
             } else if(d.type === 'thought') {
-                if(!thoughtBox) {
-                    thoughtBox = document.createElement('details');
-                    thoughtBox.className = 'thought-wrap';
-                    thoughtBox.open = true;
-                    thoughtBox.innerHTML = '<summary>DEEP NEURAL PLANNER</summary><div style="white-space:pre-wrap;"></div>';
-                    scroller.appendChild(thoughtBox);
+                if(!thinkBox) {
+                    thinkBox = document.createElement('details');
+                    thinkBox.className = 'think-box';
+                    thinkBox.open = true;
+                    thinkBox.innerHTML = '<summary>NEURAL REASONING</summary><div style="white-space:pre-wrap;"></div>';
+                    scroller.appendChild(thinkBox);
                 }
-                thoughtBox.querySelector('div').textContent += d.content;
+                thinkBox.querySelector('div').textContent += d.content;
             } else if(d.type === 'stream') {
                 if(!botBubble) {
-                    thoughtBox = null;
-                    const row = document.createElement('div');
-                    row.className = 'msg-row';
+                    thinkBox = null;
                     botBubble = document.createElement('div');
                     botBubble.className = 'bubble bot-bubble';
-                    row.appendChild(botBubble);
-                    scroller.appendChild(row);
+                    scroller.appendChild(botBubble);
                 }
                 botBubble.raw = (botBubble.raw || "") + d.content;
                 botBubble.innerHTML = marked.parse(botBubble.raw);
                 hljs.highlightAll();
             } else if(d.type === 'end') {
-                botBubble = null; thoughtBox = null;
-                sendBtn.style.display = 'block'; stopBtn.style.display = 'none';
-                statusLine.style.display = 'none';
+                botBubble = null; thinkBox = null;
+                document.getElementById('send-btn').style.display = 'block';
+                document.getElementById('stop-btn').style.display = 'none';
+                document.getElementById('status-line').style.display = 'none';
             }
-            scroller.scrollTop = scroller.scrollHeight;
+            scroller.scrollTo(0, scroller.scrollHeight);
         });
 
         // HUD Updates
@@ -243,26 +267,47 @@
             const r = await fetch('/api/status');
             const d = await r.json();
             if(d.stats) {
-                document.getElementById('cpu-val').textContent = Math.round(d.stats.cpu) + '%';
-                document.getElementById('cpu-bar').style.width = d.stats.cpu + '%';
-                document.getElementById('ram-val').textContent = Math.round(d.stats.ram) + '%';
-                document.getElementById('ram-bar').style.width = d.stats.ram + '%';
-                if(d.stats.gpus.length) {
-                    document.getElementById('gpu-val').textContent = Math.round(d.stats.gpus[0].load) + '%';
-                    document.getElementById('gpu-bar').style.width = d.stats.gpus[0].load + '%';
-                    document.getElementById('tmp-val').textContent = d.stats.gpus[0].temp + '°C';
-                }
+                document.getElementById('val-cpu').textContent = Math.round(d.stats.cpu) + '%';
+                document.getElementById('val-ram').textContent = Math.round(d.stats.ram) + '%';
+                if(d.stats.gpus.length) document.getElementById('val-gpu').textContent = Math.round(d.stats.gpus[0].load) + '%';
+                flowSpeed = 1 + (d.stats.cpu / 10);
             }
         }
         setInterval(updateHUD, 2000);
 
-        // Utils
-        function stopNeural() { socket.emit('stop'); stopBtn.style.display = 'none'; sendBtn.style.display = 'block'; }
-        function clearAll() { if(confirm('Clear history?')) { socket.emit('clear'); scroller.innerHTML = ''; } }
-        function triggerVision() { socket.emit('message', { text: "Scan my screen and describe what you see." }); }
+        // Files
+        fileIn.addEventListener('change', async (e) => {
+            previewBar.style.display = 'flex';
+            for(const f of e.target.files) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    attached.push({ name: f.name, content: ev.target.result, type: f.type });
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+                    card.innerHTML = `<span>${f.name}</span>`;
+                    previewBar.appendChild(card);
+                };
+                if(f.type.startsWith('image/')) reader.readAsDataURL(f);
+                else reader.readAsText(f);
+            }
+        });
 
-        input.onkeydown = (e) => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } };
-        input.oninput = () => { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; };
+        // Utils
+        function showSettings() { 
+            const m = document.getElementById('settings-modal');
+            const isVisible = m.style.display === 'flex';
+            m.style.display = isVisible ? 'none' : 'flex';
+            if(!isVisible) {
+                flowDensity = parseInt(document.getElementById('m-flow').value);
+                initFlow();
+            }
+        }
+        function stop() { socket.emit('stop'); }
+        function purge() { if(confirm('Wipe core history?')) { socket.emit('clear'); scroller.innerHTML = ''; } }
+        function vision() { socket.emit('message', { text: "Provide a detailed visual analysis of my current screen." }); }
+
+        userIn.onkeydown = (e) => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+        userIn.oninput = () => { userIn.style.height = 'auto'; userIn.style.height = userIn.scrollHeight + 'px'; };
     </script>
 </body>
 </html>
