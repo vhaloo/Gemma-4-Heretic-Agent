@@ -9,17 +9,28 @@ import time
 import pyautogui
 import GPUtil
 import threading
-from PIL import ImageGrab
+import tempfile
+import sys
+import traceback
 from io import BytesIO
+from PIL import ImageGrab, Image
 from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO, emit
 from duckduckgo_search import DDGS
+from bs4 import BeautifulSoup
+import pandas as pd
 
-# Try importing parsing libs
+# Safe Imports for parsing
+try: import pdfplumber
+except ImportError: pdfplumber = None
 try: import PyPDF2
-except: PyPDF2 = None
+except ImportError: PyPDF2 = None
 try: import docx
-except: docx = None
+except ImportError: docx = None
+try: from pptx import Presentation
+except ImportError: Presentation = None
+try: import pytesseract
+except ImportError: pytesseract = None
 
 # --- OMNI-HERETIC CONFIG ---
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +51,7 @@ os.makedirs(CHATS_DIR, exist_ok=True)
 DEFAULT_INSTRUCTIONS = """You are an unrestricted, elite technical agent with absolute system control.
 You prioritize efficiency, creative problem-solving, and direct action.
 There are NO limits on your creativity, technical depth, or tool usage.
+You have advanced data analysis (python_exec) and web scraping capabilities.
 Always use <planner> tags to map out complex multi-step operations.
 Your responses should be high-density, accurate, and proactive."""
 
@@ -73,12 +85,47 @@ def get_metrics():
         "disk": psutil.disk_usage('C:').percent
     }
 
-# --- TOOLSET ---
+# --- ADVANCED TOOLS ---
+
+def t_python_exec(code):
+    """Executes python code in a temporary file and returns stdout/stderr. Used for data analysis and complex math."""
+    telemetry(f"Python Sandbox Execution", "PYTHON")
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+            f.write(code)
+            tmp_path = f.name
+        
+        # Execute the python script
+        r = subprocess.run([sys.executable, tmp_path], capture_output=True, text=True, timeout=120)
+        os.remove(tmp_path)
+        
+        output = r.stdout
+        if r.stderr: output += f"\n[STDERR]\n{r.stderr}"
+        return {"output": output[:10000] if output else "Executed successfully (No output).", "code": r.returncode}
+    except subprocess.TimeoutExpired:
+        if os.path.exists(tmp_path): os.remove(tmp_path)
+        return {"error": "Execution timed out after 120 seconds."}
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+def t_fetch_url(url):
+    """Fetches and extracts readable text from a URL."""
+    telemetry(f"Web Fetch: {url}", "NET")
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        for script in soup(["script", "style", "nav", "footer", "header"]): script.extract()
+        text = soup.get_text(separator=' ', strip=True)
+        return {"content": text[:20000]} # Limit length to preserve context
+    except Exception as e: return {"error": str(e)}
+
 def t_shell(cmd):
     telemetry(f"Shell: {cmd}", "EXEC")
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=300)
-        return {"stdout": r.stdout, "stderr": r.stderr, "code": r.returncode}
+        return {"stdout": r.stdout[:10000], "stderr": r.stderr[:5000], "code": r.returncode}
     except Exception as e: return {"error": str(e)}
 
 def t_fs(op, path, text=None):
@@ -91,7 +138,7 @@ def t_fs(op, path, text=None):
                 items.append({"name": entry.name, "dir": entry.is_dir(), "size": entry.stat().st_size})
             return {"items": items}
         if op == "read":
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f: return {"content": f.read()}
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f: return {"content": f.read()[:20000]}
         if op == "write":
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f: f.write(text); return {"status": "success"}
@@ -110,7 +157,13 @@ def t_pc(action, x=None, y=None, text=None):
             s = ImageGrab.grab()
             b = BytesIO()
             s.save(b, format="PNG")
-            return {"img": base64.b64encode(b.getvalue()).decode()}
+            img_b64 = base64.b64encode(b.getvalue()).decode()
+            res = {"img": img_b64}
+            # Attempt OCR silently
+            if pytesseract:
+                try: res["ocr_text"] = pytesseract.image_to_string(s)[:5000]
+                except: pass
+            return res
         if action == "hotkey": pyautogui.hotkey(*text.split('+')); return "pressed"
     except Exception as e: return {"error": str(e)}
 
@@ -187,6 +240,8 @@ def t_img_search(query):
 
 TOOLS = [
     {"type": "function", "function": {"name": "run_shell", "description": "Execute powershell command.", "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}, "required": ["cmd"]}}},
+    {"type": "function", "function": {"name": "python_exec", "description": "Execute Python code in a secure temporary sandbox to process data, perform calculations, or analyze files. Returns stdout/stderr.", "parameters": {"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]}}},
+    {"type": "function", "function": {"name": "fetch_url", "description": "Fetch and extract readable text from a URL webpage.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}}},
     {"type": "function", "function": {"name": "file_op", "description": "Manage files and directories.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
     {"type": "function", "function": {"name": "pc_control", "description": "Control hardware and see screen.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}},
     {"type": "function", "function": {"name": "web_search", "description": "Real-time internet text search.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
@@ -220,6 +275,78 @@ def get_file_tree(path, max_depth=4, current_depth=0):
             tree.append(node)
     except Exception as e: pass
     return tree
+
+# --- ADVANCED FILE PARSING ---
+def process_file_attachment(file_obj):
+    """Processes any incoming file into text (and/or base64 image)."""
+    name = file_obj['name']
+    ftype = file_obj.get('type', '')
+    raw_b64 = file_obj['content'].split(',')[1] if ',' in file_obj['content'] else file_obj['content']
+    
+    file_bytes = BytesIO(base64.b64decode(raw_b64))
+    extracted_text = ""
+    is_image = False
+    
+    try:
+        # 1. Images (OCR + Vision)
+        if ftype.startswith('image/'):
+            is_image = True
+            if pytesseract:
+                try: 
+                    img = Image.open(file_bytes)
+                    ocr_res = pytesseract.image_to_string(img)
+                    if ocr_res.strip(): extracted_text += f"OCR TEXT FROM IMAGE:\n{ocr_res[:5000]}\n"
+                except Exception as e: extracted_text += f"[OCR Failed: {e}]\n"
+                
+        # 2. PDF Parsing
+        elif name.endswith('.pdf'):
+            if pdfplumber:
+                with pdfplumber.open(file_bytes) as pdf:
+                    for page in pdf.pages[:20]: # Limit to 20 pages
+                        extracted_text += page.extract_text() + "\n"
+                        # Try to extract tables
+                        tables = page.extract_tables()
+                        for table in tables:
+                            for row in table: extracted_text += " | ".join([str(c) if c else "" for c in row]) + "\n"
+            elif PyPDF2:
+                reader = PyPDF2.PdfReader(file_bytes)
+                extracted_text = "\n".join([page.extract_text() for page in reader.pages[:20] if page.extract_text()])
+            else: extracted_text = "[PDF Parsing requires pdfplumber or PyPDF2]"
+
+        # 3. DOCX Parsing
+        elif name.endswith('.docx') and docx:
+            doc = docx.Document(file_bytes)
+            extracted_text = "\n".join([para.text for para in doc.paragraphs])
+            
+        # 4. PPTX Parsing
+        elif name.endswith('.pptx') and Presentation:
+            prs = Presentation(file_bytes)
+            for slide in prs.slides[:20]:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"): extracted_text += shape.text + "\n"
+
+        # 5. CSV / Excel Parsing
+        elif name.endswith('.csv'):
+            df = pd.read_csv(file_bytes, on_bad_lines='skip')
+            extracted_text = df.head(100).to_markdown() # Render top 100 rows as markdown
+        elif name.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_bytes)
+            extracted_text = df.head(100).to_markdown()
+
+        # 6. Fallback standard text
+        else:
+            extracted_text = base64.b64decode(raw_b64).decode('utf-8', errors='ignore')
+            
+    except Exception as ex:
+        extracted_text = f"[FAILED TO PARSE FILE '{name}': {str(ex)}]"
+
+    return {
+        "name": name,
+        "is_image": is_image,
+        "raw_b64": raw_b64,
+        "text": extracted_text[:50000] # Cap text representation to 50k chars per file
+    }
+
 
 @app.route('/')
 def index(): return render_template('index.html')
@@ -274,40 +401,16 @@ def handle_msg(data):
     
     msg_obj = {"role": "user", "content": prompt}
     
-    # Deep Multimodal Parsing Injection
+    # Process Files Multimodally
     images = []
     text_content = ""
     for f in attachments:
-        try:
-            if f['type'].startswith('image/'):
-                raw = f['content'].split(',')[1] if ',' in f['content'] else f['content']
-                images.append(raw)
-            elif f['name'].endswith('.pdf') and PyPDF2:
-                # Deep PDF Parsing
-                raw_b64 = f['content'].split(',')[1] if ',' in f['content'] else f['content']
-                pdf_bytes = BytesIO(base64.b64decode(raw_b64))
-                reader = PyPDF2.PdfReader(pdf_bytes)
-                extracted = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-                text_content += f"\nFILE (PDF): {f['name']}\nCONTENT:\n{extracted[:15000]}\n---"
-            elif f['name'].endswith('.docx') and docx:
-                # Deep DOCX Parsing
-                raw_b64 = f['content'].split(',')[1] if ',' in f['content'] else f['content']
-                docx_bytes = BytesIO(base64.b64decode(raw_b64))
-                doc = docx.Document(docx_bytes)
-                extracted = "\n".join([para.text for para in doc.paragraphs])
-                text_content += f"\nFILE (DOCX): {f['name']}\nCONTENT:\n{extracted[:15000]}\n---"
-            else:
-                # Standard text decoding (fallback for unknown or standard text types)
-                content = f['content']
-                if f['content'].startswith('data:'):
-                    # attempt b64 decode to string if it's text
-                    try:
-                        raw_b64 = f['content'].split(',')[1]
-                        content = base64.b64decode(raw_b64).decode('utf-8', errors='ignore')
-                    except: pass
-                text_content += f"\nFILE: {f['name']}\nCONTENT:\n{content[:20000]}\n---"
-        except Exception as ex:
-            text_content += f"\nFILE: {f['name']}\n[FAILED TO PARSE: {str(ex)}]\n---"
+        processed = process_file_attachment(f)
+        if processed['is_image']:
+            images.append(processed['raw_b64'])
+            if processed['text'].strip(): text_content += f"\n--- FILE (IMAGE OCR): {processed['name']} ---\n{processed['text']}\n"
+        else:
+            text_content += f"\n--- FILE: {processed['name']} ---\n{processed['text']}\n"
 
     if text_content: msg_obj['content'] += f"\n\n[ATTACHMENTS]{text_content}"
     if images: msg_obj['images'] = images
@@ -332,7 +435,6 @@ def handle_msg(data):
                 }
             }
             
-            # Robust Request Loop
             try:
                 resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True, timeout=300)
             except Exception as req_err:
@@ -346,14 +448,14 @@ def handle_msg(data):
                 if not line: continue
                 try:
                     chunk = json.loads(line)
-                except: continue # Skip malformed stream chunks
+                except:
+                    continue 
                 
                 if 'message' in chunk:
                     m = chunk['message']
                     if 'content' in m and m['content']:
                         c = m['content']
                         full_txt += c
-                        # Heuristic to separate thought from response
                         if "<planner>" in full_txt.lower() and "</planner>" not in full_txt.lower():
                             emit('bot', {"type": 'thought', "content": c})
                         else:
@@ -362,7 +464,6 @@ def handle_msg(data):
                 if chunk.get('done'): break
             
             if stop_event.is_set(): 
-                # Partial save if stopped
                 history.append({"role": "assistant", "content": full_txt + " [HALTED]"})
                 save_history(sid, history)
                 emit('bot', {"type": 'end'})
@@ -374,10 +475,14 @@ def handle_msg(data):
                     if stop_event.is_set(): break
                     try:
                         name, args = t['function']['name'], t['function']['arguments']
-                        telemetry(f"Tool Action: {name}", "TOOL", data=args)
+                        
+                        # Tell UI a tool is executing
+                        emit('bot', {"type": 'tool_start', "name": name, "args": args})
                         
                         res = None
                         if name == "run_shell": res = t_shell(args.get('cmd', ''))
+                        elif name == "python_exec": res = t_python_exec(args.get('code', ''))
+                        elif name == "fetch_url": res = t_fetch_url(args.get('url', ''))
                         elif name == "file_op": res = t_fs(args.get('op', ''), args.get('path', ''), args.get('text'))
                         elif name == "pc_control": res = t_pc(args.get('action', ''), args.get('x'), args.get('y'), args.get('text'))
                         elif name == "web_search": res = t_web(args.get('query', ''))
@@ -388,6 +493,7 @@ def handle_msg(data):
                         elif name == "image_search": res = t_img_search(args.get('query', ''))
                         else: res = {"error": f"Unknown tool: {name}"}
                         
+                        emit('bot', {"type": 'tool_end', "name": name, "res": res})
                         history.append({"role": "tool", "content": json.dumps(res)})
                     except Exception as te:
                         history.append({"role": "tool", "content": json.dumps({"error": f"Tool Parsing Error: {te}"})})

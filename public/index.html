@@ -17,132 +17,170 @@
     <style>
         :root {
             --bg: #000000;
-            --panel: #0a0a0a;
-            --accent: #ffffff;
-            --accent-soft: rgba(255, 255, 255, 0.05);
-            --border: #1a1a1a;
+            --panel: #0f0f11;
+            --accent: #e3e3e3;
+            --accent-soft: rgba(255, 255, 255, 0.08);
+            --border: #222;
             --text: #ededed;
             --text-muted: #888888;
             --danger: #ff453a;
+            --success: #32d74b;
+            --info: #0a84ff;
         }
 
         body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
         
-        #bg-flow { position: fixed; inset: 0; z-index: -1; opacity: 0.3; pointer-events: none; }
+        #bg-flow { position: fixed; inset: 0; z-index: -1; opacity: 0.2; pointer-events: none; }
 
         .app-layout { display: flex; height: 100vh; }
 
+        /* Drag & Drop Overlay */
+        #drop-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 9999;
+            align-items: center; justify-content: center; backdrop-filter: blur(5px);
+            border: 4px dashed var(--info);
+        }
+        #drop-overlay h1 { font-size: 3rem; color: var(--info); pointer-events: none; }
+
         /* Sessions Sidebar */
         .sessions-bar { 
-            width: 240px; background: var(--bg); border-right: 1px solid var(--border); 
-            display: flex; flex-direction: column; padding: 20px 0;
+            width: 260px; background: var(--panel); border-right: 1px solid var(--border); 
+            display: flex; flex-direction: column; padding: 20px 0; z-index: 10;
         }
         .session-header { padding: 0 20px 20px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
-        .new-chat-btn { background: var(--text); color: var(--bg); border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; }
+        .new-chat-btn { background: var(--text); color: var(--bg); border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; transition: 0.2s;}
+        .new-chat-btn:hover { transform: scale(1.05); }
         
         .session-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
-        .session-item { padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .session-item { padding: 12px 15px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid transparent;}
         .session-item:hover { background: var(--accent-soft); color: var(--text); }
-        .session-item.active { background: var(--accent-soft); color: var(--text); border: 1px solid var(--border); }
+        .session-item.active { background: rgba(255,255,255,0.1); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
 
         /* Main Workspace */
-        .workspace { flex: 1; display: flex; flex-direction: column; background: var(--panel); position: relative; }
-        .workspace-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 30px; justify-content: space-between; }
+        .workspace { flex: 1; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+        .workspace-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 30px; justify-content: space-between; background: var(--panel); }
         
-        #chat-scroller { flex: 1; overflow-y: auto; padding: 40px 15%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
+        #chat-scroller { flex: 1; overflow-y: auto; padding: 40px 10%; display: flex; flex-direction: column; gap: 40px; scroll-behavior: smooth; }
 
         .msg { display: flex; flex-direction: column; gap: 10px; max-width: 100%; position: relative; }
         .msg-user { align-items: flex-end; }
         .msg-bubble { padding: 15px 0; line-height: 1.6; font-size: 1.05rem; width: 100%; border-top: 1px solid transparent; }
-        .msg-user .msg-bubble { color: var(--text); font-weight: 500; border-top: 1px solid var(--border); padding-top: 20px; }
+        .msg-user .msg-bubble { color: var(--text); font-weight: 500; border-top: 1px solid var(--border); padding-top: 20px; text-align: right; }
         .msg-agent .msg-bubble { color: var(--text); }
 
-        .attachment-preview { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-        .img-thumb { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
-        .file-pill { background: var(--accent-soft); padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; border: 1px solid var(--border); }
+        .attachment-preview { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; justify-content: flex-end;}
+        .img-thumb { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.3);}
+        .file-pill { background: var(--panel); padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);}
+        
+        /* Tool UI */
+        .tool-call-block { 
+            background: #111; border: 1px solid var(--border); border-radius: 8px; 
+            margin: 10px 0; overflow: hidden; font-size: 0.85rem; width: fit-content; max-width: 100%;
+        }
+        .tool-header { 
+            padding: 10px 15px; display: flex; align-items: center; gap: 10px; cursor: pointer;
+            background: #1a1a1a; font-weight: 600; color: #aaa;
+        }
+        .tool-header:hover { color: #fff; background: #222; }
+        .tool-body { display: none; padding: 15px; border-top: 1px solid var(--border); background: #0a0a0a; color: #888; font-family: 'JetBrains Mono', monospace; max-height: 300px; overflow-y: auto;}
+        .tool-body.open { display: block; }
+        .tool-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         .reasoning { background: #080808; border-radius: 8px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border); font-size: 0.9rem; color: var(--text-muted); }
         .reasoning summary { cursor: pointer; font-weight: 600; color: #666; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
 
         /* Input Zone */
-        .input-zone { padding: 20px 15% 40px 15%; background: var(--panel); border-top: 1px solid var(--border); }
+        .input-zone { padding: 20px 10% 40px 10%; background: var(--bg); }
         .tray { display: flex; gap: 10px; padding-bottom: 15px; flex-wrap: wrap; }
-        .tray-item { position: relative; }
-        .tray-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; }
-        .tray-item .remove { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .tray-item { position: relative; animation: popIn 0.2s ease-out;}
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .tray-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border);}
+        .tray-item .remove { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5);}
 
         .input-box {
-            background: #000; border: 1px solid var(--border); border-radius: 12px;
+            background: var(--panel); border: 1px solid #333; border-radius: 16px;
             padding: 12px 20px; display: flex; align-items: flex-end; gap: 15px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: 0.2s;
         }
-        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1rem; resize: none; max-height: 200px; padding: 5px 0; }
+        .input-box:focus-within { border-color: #555; box-shadow: 0 10px 40px rgba(255,255,255,0.05); }
+        textarea { flex: 1; background: transparent; border: none; color: white; outline: none; font-size: 1.05rem; resize: none; max-height: 300px; padding: 5px 0; line-height: 1.5;}
         
-        .tool-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 6px; transition: 0.2s; font-size: 1.1rem; }
+        .tool-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 10px; border-radius: 8px; transition: 0.2s; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;}
         .tool-btn:hover { background: var(--accent-soft); color: var(--text); }
-        .send-btn { background: var(--text); color: var(--bg); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-        .stop-btn { background: var(--danger); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: none; }
+        .send-btn { background: var(--text); color: var(--bg); border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .send-btn:hover { background: #fff; transform: scale(1.05); }
+        .stop-btn { background: var(--danger); color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; display: none; }
 
         /* Right Sidebar */
-        .utility-bar { 
-            width: 300px; background: var(--bg); border-left: 1px solid var(--border); 
-            display: flex; flex-direction: column; padding: 20px; gap: 20px;
+        .utility-bar {
+            width: 320px; background: var(--panel); border-left: 1px solid var(--border);
+            display: flex; flex-direction: column; padding: 20px; gap: 20px; z-index: 10;
         }
-        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; }
+        .card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);}
         .card-title { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 1px; }
 
         .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .metric { display: flex; flex-direction: column; }
-        .metric label { font-size: 0.6rem; color: #555; }
-        .metric span { font-size: 0.9rem; font-weight: 600; }
+        .metric label { font-size: 0.6rem; color: #666; }
+        .metric span { font-size: 0.95rem; font-weight: 600; color: #ddd;}
 
-        #telemetry-box { flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #444; }
+        #telemetry-box { flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #555; }
 
         /* Markdown Styles */
-        pre { background: #0d0d0d !important; padding: 20px; border-radius: 8px; border: 1px solid var(--border); position: relative; overflow-x: auto; margin: 15px 0; }
-        code { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
-        .copy-code { position: absolute; top: 10px; right: 10px; background: var(--accent-soft); color: #888; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 0.6rem; cursor: pointer; opacity: 0; transition: 0.2s; }
+        pre { background: #080808 !important; padding: 20px; border-radius: 10px; border: 1px solid #222; position: relative; overflow-x: auto; margin: 15px 0; box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);}
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+        .copy-code { position: absolute; top: 10px; right: 10px; background: var(--panel); color: #888; border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 0.65rem; font-weight: bold; cursor: pointer; opacity: 0; transition: 0.2s; }
         pre:hover .copy-code { opacity: 1; }
-        .copy-code:hover { color: white; background: var(--border); }
-        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-        th, td { border: 1px solid var(--border); padding: 10px; font-size: 0.9rem; }
-        th { background: var(--accent-soft); }
+        .copy-code:hover { color: white; background: #333; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 0.9rem; }
+        th, td { border: 1px solid var(--border); padding: 12px; }
+        th { background: #111; font-weight: 600;}
+        tr:nth-child(even) { background: rgba(255,255,255,0.02); }
 
         /* Modals */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; align-items: center; justify-content: center; }
-        .modal-content { background: #0a0a0a; border: 1px solid var(--border); padding: 40px; border-radius: 12px; width: 700px; display: flex; flex-direction: column; gap: 20px; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(10px);}
+        .modal-content { background: var(--panel); border: 1px solid var(--border); padding: 40px; border-radius: 16px; width: 700px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);}
         .modal-content h2 { margin: 0; font-size: 1.5rem; font-weight: 700; }
         .field { display: flex; flex-direction: column; gap: 8px; }
         .field label { font-size: 0.8rem; color: var(--text-muted); }
-        .field textarea { background: #000; border: 1px solid var(--border); border-radius: 8px; padding: 15px; color: white; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; height: 300px; }
+        .field textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; color: white; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; height: 300px; resize: vertical;}
 
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
     </style>
 </head>
 <body>
 
     <canvas id="bg-flow"></canvas>
+    
+    <div id="drop-overlay">
+        <h1>Drop Files Here</h1>
+    </div>
 
     <div class="app-layout">
         <!-- Sessions Sidebar -->
         <aside class="sessions-bar">
             <div class="session-header">
-                <span style="font-weight: 800; font-size: 0.9rem; letter-spacing: 1px;">TITAN OS</span>
-                <button class="new-chat-btn" onclick="newSession()">NEW</button>
+                <span style="font-weight: 800; font-size: 1.1rem; letter-spacing: 1px;">TITAN <span style="color:var(--info);">4.0</span></span>
+                <button class="new-chat-btn" onclick="newSession()">+ NEW</button>
             </div>
             <div id="session-list" class="session-list"></div>
             <div style="padding: 20px; border-top: 1px solid var(--border);">
-                <button class="tool-btn" style="width:100%; text-align:left; font-size: 0.8rem;" onclick="toggleSettings()">⚙️ SETTINGS</button>
+                <button class="tool-btn" style="width:100%; justify-content: flex-start; font-size: 0.85rem; gap:10px;" onclick="toggleSettings()">⚙️ Settings</button>
             </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="workspace">
+        <main class="workspace" id="workspace-main">
             <header class="workspace-header">
-                <div id="session-title" style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted);">Default Session</div>
-                <div style="display:flex; gap:10px;">
-                    <div id="status-chip" style="font-size: 0.7rem; color: #444; font-weight: 700; text-transform: uppercase;">READY</div>
+                <div id="session-title" style="font-weight: 600; font-size: 1rem; color: #ccc;">Default Session</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div id="status-chip" style="font-size: 0.75rem; color: #666; font-weight: 700; text-transform: uppercase; display:flex; align-items:center; gap:6px;">
+                        <span id="status-dot" style="display:inline-block; width:8px; height:8px; background:#666; border-radius:50%;"></span>
+                        READY
+                    </div>
                 </div>
             </header>
 
@@ -151,14 +189,14 @@
             <div class="input-zone">
                 <div id="input-tray" class="tray"></div>
                 <div style="display:flex; justify-content:space-between; padding-bottom:10px; align-items:center;">
-                    <div style="font-size:0.7rem; color:var(--text-muted);"><span id="token-estimate">0</span> Context Elements</div>
-                    <label style="color:var(--text-muted); font-size:0.75rem; display:flex; align-items:center; gap:5px; cursor:pointer;">
-                        <input type="checkbox" id="auto-pilot-toggle" style="accent-color:var(--danger);"> 
-                        Enable Auto-Pilot (100x Loops)
+                    <div style="font-size:0.75rem; color:var(--text-muted);"><span id="token-estimate" style="color:#aaa;">0</span> Chars est.</div>
+                    <label style="color:var(--text-muted); font-size:0.8rem; display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="auto-pilot-toggle" style="accent-color:var(--info); width:16px; height:16px;">
+                        Auto-Pilot (100x)
                     </label>
                 </div>
                 <div class="input-box">
-                    <input type="file" id="file-upload" style="display:none" multiple accept="image/*,text/*,.json,.js,.py,.html,.css,.md,.pdf,.docx">
+                    <input type="file" id="file-upload" style="display:none" multiple accept="image/*,text/*,.json,.js,.py,.html,.css,.md,.pdf,.docx,.pptx,.csv,.xlsx">
                     <button class="tool-btn" onclick="document.getElementById('file-upload').click()" title="Attach File">📎</button>
                     <button class="tool-btn" id="mic-btn" onclick="toggleMic()" title="Voice Dictation">🎤</button>
                     <textarea id="main-input" rows="1" placeholder="Type a message, drop files, or speak..."></textarea>
@@ -186,15 +224,15 @@
             </div>
 
             <div class="card" style="flex:1; display:flex; flex-direction:column;">
-                <div class="card-title" style="display:flex; justify-content:space-between;">
+                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
                     Live Workspace 
-                    <span style="cursor:pointer;" onclick="fetchFileTree()">🔄</span>
+                    <span style="cursor:pointer; font-size:1rem;" onclick="fetchFileTree()">🔄</span>
                 </div>
-                <div id="file-explorer" style="font-size:0.75rem; color: #666; flex:1; overflow-y: auto;"></div>
+                <div id="file-explorer" style="font-size:0.8rem; color: #888; flex:1; overflow-y: auto;"></div>
             </div>
             
-            <div class="card" style="padding: 10px;">
-                <button class="tool-btn" style="width:100%; border: 1px solid var(--border); font-size: 0.75rem; font-weight: bold; padding: 10px;" onclick="viewMemory()">🧠 KNOWLEDGE BASE</button>
+            <div class="card" style="padding: 10px; background: transparent; border: none; box-shadow: none;">
+                <button class="tool-btn" style="width:100%; border: 1px solid var(--info); color: var(--info); font-size: 0.8rem; font-weight: bold; padding: 12px; border-radius:10px;" onclick="viewMemory()">🧠 KNOWLEDGE BASE</button>
             </div>
         </aside>
     </div>
@@ -208,7 +246,7 @@
             </div>
             
             <div class="field">
-                <label>Custom System Instructions (Unrestricted Mode Enabled)</label>
+                <label>Custom System Instructions</label>
                 <textarea id="s-instructions"></textarea>
             </div>
 
@@ -219,7 +257,7 @@
                 </div>
                 <div class="field">
                     <label>Context Window (Tokens)</label>
-                    <input type="number" id="s-ctx" value="32768" style="background:#000; border:1px solid var(--border); color:white; padding:8px; border-radius:4px;">
+                    <input type="number" id="s-ctx" value="32768" style="background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px;">
                 </div>
             </div>
 
@@ -229,9 +267,11 @@
 
     <!-- Sandbox Modal -->
     <div id="sandbox-modal" class="modal">
-        <div class="modal-content" style="width: 90vw; height: 90vh; background: #fff; padding: 0; overflow: hidden; border-radius: 8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; background: #000; padding: 10px 20px;">
-                <h2 style="color: white; font-size: 1rem;">Artifact Sandbox Preview</h2>
+        <div class="modal-content" style="width: 90vw; height: 90vh; background: #fff; padding: 0; overflow: hidden; border-radius: 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; background: #000; padding: 15px 20px;">
+                <h2 style="color: white; font-size: 1.1rem; display:flex; align-items:center; gap:10px;">
+                    <span style="color:var(--info);">⚡</span> Artifact Sandbox
+                </h2>
                 <button class="tool-btn" style="color: white;" onclick="document.getElementById('sandbox-modal').style.display='none'">✕</button>
             </div>
             <iframe id="sandbox-frame" style="flex:1; width:100%; height: 100%; background:white; border:none;"></iframe>
@@ -249,6 +289,7 @@
         let attachments = [];
         let agentMsg = null;
         let reasoning = null;
+        let activeToolCalls = {}; // Map of tool_id to DOM element
 
         marked.setOptions({ 
             highlight: (code, lang) => hljs.highlightAuto(code).value,
@@ -256,14 +297,41 @@
             gfm: true
         });
 
+        // Drag and Drop
+        const dropOverlay = document.getElementById('drop-overlay');
+        let dragCounter = 0;
+        document.body.addEventListener('dragenter', (e) => { e.preventDefault(); dragCounter++; dropOverlay.style.display = 'flex'; });
+        document.body.addEventListener('dragleave', (e) => { e.preventDefault(); dragCounter--; if(dragCounter===0) dropOverlay.style.display = 'none'; });
+        document.body.addEventListener('dragover', (e) => { e.preventDefault(); });
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dropOverlay.style.display = 'none';
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        function handleFiles(files) {
+            for(const f of files) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    attachments.push({ name: f.name, type: f.type, content: ev.target.result });
+                    renderTray();
+                    updateTokenCount();
+                };
+                reader.readAsDataURL(f);
+            }
+        }
+        document.getElementById('file-upload').onchange = (e) => handleFiles(e.target.files);
+
         // Background
         const canvas = document.getElementById('bg-flow');
         const ctx = canvas.getContext('2d');
         let dots = [];
-        function initBg() {
-            canvas.width = innerWidth; canvas.height = innerHeight;
+        function initBg() { canvas.width = innerWidth; canvas.height = innerHeight;
             dots = [];
-            for(let i=0; i<80; i++) dots.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5 });
+            for(let i=0; i<60; i++) dots.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3 });
         }
         function drawBg() {
             ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -303,8 +371,13 @@
         function toggleMic() {
             if(!recognition) return alert("Speech recognition not supported in this browser.");
             const btn = document.getElementById('mic-btn');
-            if(btn.style.color === 'var(--danger)') { recognition.stop(); btn.style.color = 'var(--text-muted)'; } 
+            if(btn.style.color === 'var(--danger)') { recognition.stop(); btn.style.color = 'var(--text-muted)'; }
             else { recognition.start(); btn.style.color = 'var(--danger)'; }
+        }
+
+        // Status Management
+        function setStatus(text, color) {
+            document.getElementById('status-chip').innerHTML = `<span id="status-dot" style="display:inline-block; width:8px; height:8px; background:${color}; border-radius:50%; box-shadow: 0 0 8px ${color};"></span> ${text}`;
         }
 
         // Messaging
@@ -330,8 +403,7 @@
             
             document.getElementById('send-btn').style.display = 'none';
             document.getElementById('stop-btn').style.display = 'block';
-            document.getElementById('status-chip').textContent = 'THINKING';
-            document.getElementById('status-chip').style.color = '#fff';
+            setStatus("THINKING", "var(--info)");
         }
 
         function appendMessage(role, text, files = []) {
@@ -342,8 +414,8 @@
             if(files.length > 0) {
                 html += '<div class="attachment-preview">';
                 files.forEach(f => {
-                    if(f.type.startsWith('image/')) html += `<img src="${f.content}" class="img-thumb">`;
-                    else html += `<div class="file-pill">${f.name}</div>`;
+                    if(f.type && f.type.startsWith('image/')) html += `<img src="${f.content}" class="img-thumb">`;
+                    else html += `<div class="file-pill">📄 ${f.name}</div>`;
                 });
                 html += '</div>';
             }
@@ -366,7 +438,7 @@
 
         socket.on('bot', (d) => {
             if(d.type === 'step') {
-                document.getElementById('status-chip').textContent = d.content;
+                setStatus(d.content, "var(--info)");
             } else if(d.type === 'thought') {
                 if(!reasoning) {
                     reasoning = document.createElement('details');
@@ -379,7 +451,7 @@
                 scroller.scrollTop = scroller.scrollHeight;
             } else if(d.type === 'stream') {
                 if(!agentMsg) {
-                    reasoning = null;
+                    reasoning = null; // Close planner context implicitly
                     agentMsg = document.createElement('div');
                     agentMsg.className = 'msg msg-agent';
                     agentMsg.innerHTML = '<div class="msg-bubble"></div>';
@@ -389,6 +461,7 @@
                 bubble.raw = (bubble.raw || "") + d.content;
                 bubble.innerHTML = marked.parse(bubble.raw);
                 
+                // Add copy buttons and Sandbox triggers
                 bubble.querySelectorAll('pre').forEach(pre => {
                     if(!pre.querySelector('.copy-code.copy')) {
                         const b = document.createElement('button');
@@ -398,16 +471,16 @@
                     }
                 });
 
-                // Sandbox Support
                 bubble.querySelectorAll('pre code.language-html, pre code.language-javascript').forEach(block => {
                     const pre = block.parentElement;
                     if(!pre.querySelector('.run-code')) {
                         const b = document.createElement('button');
                         b.className = 'copy-code run-code'; 
-                        b.style.right = '65px';
-                        b.textContent = 'RUN';
+                        b.style.right = '70px';
+                        b.textContent = '▶ RUN';
+                        b.style.color = "var(--success)";
                         b.onclick = () => {
-                            const code = pre.innerText.replace('COPY','').replace('RUN','').trim();
+                            const code = pre.innerText.replace('COPY','').replace('▶ RUN','').trim();
                             const type = block.className.includes('html') ? 'html' : 'js';
                             const modal = document.getElementById('sandbox-modal');
                             const frame = document.getElementById('sandbox-frame');
@@ -436,12 +509,47 @@
                 hljs.highlightAll();
                 if(window.MathJax) MathJax.typesetPromise([agentMsg || bubble]).catch(()=>{});
                 scroller.scrollTop = scroller.scrollHeight;
+
+            } else if(d.type === 'tool_start') {
+                // UI feedback for tool start
+                const tBlock = document.createElement('div');
+                tBlock.className = 'tool-call-block';
+                const id = "tool_" + Date.now();
+                tBlock.id = id;
+                tBlock.innerHTML = `
+                    <div class="tool-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                        <span class="tool-spinner"></span>
+                        Using tool: ${d.name}
+                    </div>
+                    <div class="tool-body">Input:
+${JSON.stringify(d.args, null, 2)}</div>
+                `;
+                scroller.appendChild(tBlock);
+                activeToolCalls[d.name] = tBlock;
+                scroller.scrollTop = scroller.scrollHeight;
+                setStatus(`Running ${d.name}...`, "var(--info)");
+
+            } else if(d.type === 'tool_end') {
+                // Update tool block
+                const tBlock = activeToolCalls[d.name];
+                if(tBlock) {
+                    const header = tBlock.querySelector('.tool-header');
+                    header.innerHTML = `<span>✔️</span> Used tool: ${d.name}`;
+                    header.style.color = 'var(--success)';
+                    const body = tBlock.querySelector('.tool-body');
+                    body.innerHTML += `
+
+Output:
+${JSON.stringify(d.res, null, 2).substring(0, 1000)}${JSON.stringify(d.res).length > 1000 ? '\n... (truncated)' : ''}`;
+                    delete activeToolCalls[d.name];
+                }
+                setStatus("THINKING", "var(--info)");
+
             } else if(d.type === 'end') {
                 agentMsg = null; reasoning = null;
                 document.getElementById('send-btn').style.display = 'block';
                 document.getElementById('stop-btn').style.display = 'none';
-                document.getElementById('status-chip').textContent = 'READY';
-                document.getElementById('status-chip').style.color = '#444';
+                setStatus("READY", "#666");
             }
         });
 
@@ -482,8 +590,19 @@
         socket.on('history', (history) => {
             scroller.innerHTML = '';
             history.forEach(m => {
-                if(m.role !== 'system') {
-                    appendMessage(m.role === 'assistant' ? 'agent' : 'user', m.content);
+                if(m.role === 'user' || m.role === 'assistant') {
+                    if(m.content) appendMessage(m.role === 'assistant' ? 'agent' : 'user', m.content);
+                } else if(m.role === 'tool') {
+                    const tBlock = document.createElement('div');
+                    tBlock.className = 'tool-call-block';
+                    tBlock.innerHTML = `
+                        <div class="tool-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                            <span>✔️</span> Past Tool Execution
+                        </div>
+                        <div class="tool-body">Output:
+${m.content.substring(0, 500)}...</div>
+                    `;
+                    scroller.appendChild(tBlock);
                 }
             });
         });
@@ -512,7 +631,7 @@
                 item.style.transition = '0.2s';
                 item.style.borderRadius = '4px';
                 item.onmouseover = () => { item.style.background = 'var(--accent-soft)'; item.style.color = 'var(--text)'; };
-                item.onmouseout = () => { item.style.background = 'transparent'; item.style.color = '#666'; };
+                item.onmouseout = () => { item.style.background = 'transparent'; item.style.color = '#888'; };
                 item.innerHTML = `<span style="opacity:0.7">${n.is_dir ? '📁' : '📄'}</span> ${n.name}`;
                 item.onclick = async (e) => {
                     e.stopPropagation();
@@ -523,7 +642,7 @@
                             const res = await fetch('/api/fs/read', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:n.path})});
                             const data = await res.json();
                             if(data.content) {
-                                attachments.push({name: n.name, type: 'text/plain', content: data.content});
+                                attachments.push({name: n.name, type: 'text/plain', content: `data:text/plain;base64,${btoa(unescape(encodeURIComponent(data.content)))}`});
                                 renderTray();
                                 updateTokenCount();
                             }
@@ -546,7 +665,7 @@
         socket.on('telemetry', (d) => {
             const el = document.createElement('div');
             el.style.marginBottom = '4px';
-            el.innerHTML = `<span style="color:#666">[${new Date().toLocaleTimeString()}]</span> <span style="color:var(--text); font-weight:700">${d.cat}</span> ${d.msg}`;
+            el.innerHTML = `<span style="color:#444">[${new Date().toLocaleTimeString()}]</span> <span style="color:var(--text); font-weight:700">${d.cat}</span> ${d.msg}`;
             telBox.appendChild(el);
             telBox.scrollTop = telBox.scrollHeight;
         });
@@ -564,7 +683,7 @@
         setInterval(syncStatus, 3000);
         syncStatus();
         updateSessions();
-        fetchFileTree(); // Initial file tree load
+        fetchFileTree();
 
         // Settings
         async function toggleSettings() {
@@ -597,26 +716,13 @@
         }
 
         // Utils
-        document.getElementById('file-upload').onchange = (e) => {
-            for(const f of e.target.files) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    attachments.push({ name: f.name, type: f.type, content: ev.target.result });
-                    renderTray();
-                    updateTokenCount();
-                };
-                if(f.type.startsWith('image/')) reader.readAsDataURL(f);
-                else reader.readAsDataURL(f); // For pdf/docx logic in backend, passing as b64 data url is safest
-            }
-        };
-
         function renderTray() {
             tray.innerHTML = '';
             attachments.forEach(a => {
                 const item = document.createElement('div');
                 item.className = 'tray-item';
                 if(a.type && a.type.startsWith('image/')) item.innerHTML = `<img src="${a.content}"><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
-                else item.innerHTML = `<div class="file-pill" style="height:60px; display:flex; align-items:center;">${a.name}</div><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
+                else item.innerHTML = `<div class="file-pill" style="height:60px; display:flex; align-items:center;">📄 ${a.name}</div><div class="remove" onclick="removeFile('${a.name}')">✕</div>`;
                 tray.appendChild(item);
             });
         }
@@ -628,8 +734,8 @@
         }
 
         function updateTokenCount() {
-            let est = mainInput.value.length / 4;
-            attachments.forEach(a => est += (a.content.length / 4));
+            let est = mainInput.value.length;
+            attachments.forEach(a => est += (a.content.length / 4)); // very rough text conversion est
             document.getElementById('token-estimate').textContent = Math.round(est).toLocaleString();
         }
 
