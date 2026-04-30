@@ -8,6 +8,12 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+        MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
         :root {
             --bg: #000000;
@@ -143,6 +149,12 @@
 
             <div class="input-zone">
                 <div id="input-tray" class="tray"></div>
+                <div style="display:flex; justify-content:flex-end; padding-bottom:10px;">
+                    <label style="color:var(--text-muted); font-size:0.75rem; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" id="auto-pilot-toggle" style="accent-color:var(--danger);">
+                        Enable Auto-Pilot (100x Loops)
+                    </label>
+                </div>
                 <div class="input-box">
                     <input type="file" id="file-upload" style="display:none" multiple accept="image/*,text/*,.json,.js,.py,.html,.css,.md">
                     <button class="tool-btn" onclick="document.getElementById('file-upload').click()">📎</button>
@@ -256,10 +268,12 @@
 
             appendMessage('user', text, attachments);
             
+            const autoPilot = document.getElementById('auto-pilot-toggle') ? document.getElementById('auto-pilot-toggle').checked : false;
             socket.emit('message', { 
                 text: text, 
                 files: attachments, 
-                sid: currentSid 
+                sid: currentSid,
+                auto_pilot: autoPilot
             });
 
             mainInput.value = '';
@@ -332,11 +346,27 @@
                     if(!pre.querySelector('.copy-code')) {
                         const b = document.createElement('button');
                         b.className = 'copy-code'; b.textContent = 'COPY';
-                        b.onclick = () => { navigator.clipboard.writeText(pre.innerText); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
+                        b.onclick = () => { navigator.clipboard.writeText(pre.innerText.replace('COPY','').trim()); b.textContent = 'COPIED'; setTimeout(() => b.textContent='COPY', 2000); };
                         pre.appendChild(b);
                     }
                 });
+
+                bubble.querySelectorAll('code.language-mermaid').forEach((block) => {
+                    const pre = block.parentElement;
+                    if(pre && pre.tagName === 'PRE' && !pre.classList.contains('mermaid-rendered')) {
+                        const content = block.textContent;
+                        const id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+                        const div = document.createElement('div');
+                        div.id = id;
+                        div.className = 'mermaid';
+                        div.textContent = content;
+                        pre.replaceWith(div);
+                        try { mermaid.init(undefined, div); } catch(e){}
+                    }
+                });
+
                 hljs.highlightAll();
+                if(window.MathJax) MathJax.typesetPromise([container || agentMsg || bubble]).catch(()=>{});
                 scroller.scrollTop = scroller.scrollHeight;
             } else if(d.type === 'end') {
                 agentMsg = null; reasoning = null;

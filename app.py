@@ -107,6 +107,26 @@ def t_pc(action, x=None, y=None, text=None):
         if action == "hotkey": pyautogui.hotkey(*text.split('+')); return "pressed"
     except Exception as e: return {"error": str(e)}
 
+def t_search_codebase(query, path=WORKSPACE):
+    telemetry(f"Code Search: {query}", "CODEBASE")
+    try:
+        results = []
+        for root, _, files in os.walk(path):
+            if any(ignore in root for ignore in ['.git', 'node_modules', '__pycache__', 'sessions']): continue
+            for file in files:
+                if file.endswith(('.json', '.py', '.js', '.html', '.css', '.md', '.txt', '.ts', '.jsx', '.tsx', '.bat')):
+                    filepath = os.path.join(root, file)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                            for i, line in enumerate(lines):
+                                if query.lower() in line.lower():
+                                    results.append(f"{os.path.relpath(filepath, path)}:{i+1}: {line.strip()[:100]}")
+                                    if len(results) >= 20: return {"results": results, "note": "Truncated at 20 results."}
+                    except: pass
+        return {"results": results if results else "No matches found."}
+    except Exception as e: return {"error": str(e)}
+
 def t_web(query):
     telemetry(f"Web Search: {query}", "NET")
     try:
@@ -125,7 +145,8 @@ TOOLS = [
     {"type": "function", "function": {"name": "file_op", "description": "Manage files and directories.", "parameters": {"type": "object", "properties": {"op": {"type": "string", "enum": ["list", "read", "write", "delete"]}, "path": {"type": "string"}, "text": {"type": "string"}}, "required": ["op", "path"]}}},
     {"type": "function", "function": {"name": "pc_control", "description": "Control hardware and see screen.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["click", "type", "vision", "hotkey"]}, "x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}}, "required": ["action"]}}},
     {"type": "function", "function": {"name": "web_search", "description": "Real-time internet search.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "speak", "description": "Voice synthesis.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}
+    {"type": "function", "function": {"name": "speak", "description": "Voice synthesis.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "search_codebase", "description": "Search codebase for a text query.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
 ]
 
 # --- SESSION MGMT ---
@@ -171,6 +192,7 @@ def handle_msg(data):
     attachments = data.get('files', [])
     sid = data.get('sid', current_session)
     cfg = load_config()
+    auto_pilot = data.get('auto_pilot', False)
     
     history = get_history(sid)
     if not history:
@@ -195,7 +217,8 @@ def handle_msg(data):
     history.append(msg_obj)
     
     try:
-        for loop in range(20):
+        max_loops = 100 if auto_pilot else 20
+        for loop in range(max_loops):
             if stop_event.is_set(): break
             telemetry(f"Cognitive Loop {loop+1}", "THINK")
             emit('bot', {"type": 'step', "content": f"Deep Thought {loop+1}..."})
@@ -250,6 +273,7 @@ def handle_msg(data):
                     elif name == "pc_control": res = t_pc(args['action'], args.get('x'), args.get('y'), args.get('text'))
                     elif name == "web_search": res = t_web(args['query'])
                     elif name == "speak": res = t_speak(args['text'])
+                    elif name == "search_codebase": res = t_search_codebase(args['query'])
                     
                     history.append({"role": "tool", "content": json.dumps(res)})
                 continue
